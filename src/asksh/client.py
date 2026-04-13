@@ -23,46 +23,9 @@ if not logger.handlers:
     logger.addHandler(_stdout)
     logger.setLevel(logging.INFO)
 
-# Models available for selection in the UI.
-AVAILABLE_MODELS: list[str] = [
-    "llama3.1:8b-instruct-q8_0",
-]
-
-DEFAULT_MODEL: str = "llama3.1:8b-instruct-q8_0"
+DEFAULT_MODEL: str = "qwen2.5-coder"
 
 MAX_TOOL_ROUNDS = 5
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
-
-def _history_to_api_input(history: ConversationHistory) -> list[dict]:
-    """Convert conversation history to the list of input items the OpenAI Responses API expects."""
-
-    out: list[dict] = []
-    for item in history.get_items():
-        if isinstance(item, Message):
-            out.append({"role": item.role, "content": item.content})
-        elif isinstance(item, ToolCallItem):
-            out.append(
-                {
-                    "type": "function_call",
-                    "call_id": item.call_id,
-                    "name": item.name,
-                    "arguments": item.arguments,
-                }
-            )
-        elif isinstance(item, ToolOutputItem):
-            out.append(
-                {
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": item.output,
-                }
-            )
-    return out
 
 
 def _history_to_ollama_messages(history: ConversationHistory) -> list[dict]:
@@ -95,21 +58,6 @@ def _history_to_ollama_messages(history: ConversationHistory) -> list[dict]:
                 out.append({"role": "assistant", "content": "", "tool_calls": [tool_call]})
         elif isinstance(item, ToolOutputItem):
             out.append({"role": "tool", "content": item.output})
-    return out
-
-
-def _get_function_calls(response) -> list[tuple[str, str, str]]:
-    """Extract (call_id, name, arguments) from response.output for function_call items."""
-    out: list[tuple[str, str, str]] = []
-    for item in getattr(response, "output", []) or []:
-        if getattr(item, "type", None) == "function_call":
-            out.append(
-                (
-                    getattr(item, "call_id", ""),
-                    getattr(item, "name", ""),
-                    getattr(item, "arguments", "{}"),
-                )
-            )
     return out
 
 
@@ -159,11 +107,6 @@ def _run_tool_handlers(
     return results
 
 
-# ---------------------------------------------------------------------------
-# Base class
-# ---------------------------------------------------------------------------
-
-
 class BaseChatClient(ABC):
     """Abstract base class shared by all chat backend implementations."""
 
@@ -198,202 +141,6 @@ class BaseChatClient(ABC):
         """
 
 
-# ---------------------------------------------------------------------------
-# OpenAI implementation
-# ---------------------------------------------------------------------------
-
-
-class OpenAIChatClient(BaseChatClient):
-    """Thin wrapper around the OpenAI Response API.
-
-    Handles streaming responses and multi-turn state via optional
-    ``ConversationHistory``. When history is provided, every request is built
-    from the full history (including tool calls and outputs). Supports
-    optional tools and tool_handlers for function calling.
-    """
-
-    def __init__(self, api_key: str | None = None) -> None:
-        from openai import OpenAI  # imported lazily so the package is optional
-
-        self._client = OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
-
-    def send_message(
-        self,
-        user_input: str,
-        *,
-        model: str = DEFAULT_MODEL,
-        instructions: str | None = None,
-        history: ConversationHistory | None = None,
-        tools: list | None = None,
-        tool_handlers: dict | None = None,
-    ) -> tuple[str, str]:
-        """Send a message and return the full assistant reply and response id.
-
-        If history is provided, the full conversation (including tool calls and
-        outputs) is sent as input; no previous_response_id is used. If tools
-        are provided and the model returns function calls, handlers are run,
-        tool calls and outputs are appended to history, and the API is called
-        again with the full history until the model returns only text (up to
-        MAX_TOOL_ROUNDS).
-
-        Returns:
-            A ``(assistant_text, response_id)`` tuple.
-        """
-        if history is not None:
-            history.add_message("user", user_input)
-            api_input = _history_to_api_input(history)
-            kwargs = {"model": model, "input": api_input}
-            if instructions:
-                kwargs["instructions"] = instructions
-            if tools:
-                kwargs["tools"] = tools
-        else:
-            kwargs = {"model": model, "input": user_input}
-            if instructions:
-                kwargs["instructions"] = instructions
-            if tools:
-                kwargs["tools"] = tools
-
-        response = self._client.responses.create(**kwargs)
-        rounds = 0
-        while rounds < MAX_TOOL_ROUNDS:
-            function_calls = _get_function_calls(response)
-            if not function_calls:
-                break
-            tool_outputs = _run_tool_handlers(tool_handlers or {}, function_calls)
-            if history is not None:
-                history.add_tool_calls(function_calls)
-                history.add_tool_outputs(tool_outputs)
-                kwargs = {
-                    "model": model,
-                    "input": _history_to_api_input(history),
-                    "tools": tools,
-                }
-                if instructions:
-                    kwargs["instructions"] = instructions
-            else:
-                kwargs = {
-                    "model": model,
-                    "input": tool_outputs,
-                    "previous_response_id": response.id,
-                    "tools": tools,
-                }
-                if instructions:
-                    kwargs["instructions"] = instructions
-            response = self._client.responses.create(**kwargs)
-            rounds += 1
-
-        if history is not None:
-            history.add_message("assistant", response.output_text)
-        return response.output_text, response.id
-
-    def stream_message(
-        self,
-        user_input: str,
-        *,
-        model: str = DEFAULT_MODEL,
-        instructions: str | None = None,
-        history: ConversationHistory | None = None,
-        tools: list | None = None,
-        tool_handlers: dict | None = None,
-    ) -> Generator[str, None, tuple[str, str]]:
-        """Stream a response, yielding text deltas as they arrive.
-
-        If history is provided, the full conversation is sent as input. If
-        tools are provided and the model returns function calls, handlers are
-        run, tool calls and outputs are appended to history, and a follow-up
-        request is streamed until the model returns only text (up to
-        MAX_TOOL_ROUNDS).
-
-        The generator's return value (accessible via ``StopIteration.value``)
-        is a ``(full_text, response_id)`` tuple that callers can capture
-        after exhausting the generator.
-
-        Yields:
-            Incremental text chunks from the assistant.
-        """
-        full_text = ""
-        response_id = ""
-        if history is not None:
-            history.add_message("user", user_input)
-            api_input = _history_to_api_input(history)
-            kwargs = {"model": model, "input": api_input, "stream": True}
-            if instructions:
-                kwargs["instructions"] = instructions
-            if tools:
-                kwargs["tools"] = tools
-        else:
-            kwargs = {
-                "model": model,
-                "input": user_input,
-                "stream": True,
-            }
-            if instructions:
-                kwargs["instructions"] = instructions
-            if tools:
-                kwargs["tools"] = tools
-
-        response_for_output = None
-        rounds = 0
-
-        while rounds < MAX_TOOL_ROUNDS:
-            stream = self._client.responses.create(**kwargs)
-            full_text = ""
-            response_for_output = None
-
-            for event in stream:
-                if event.type == "response.output_text.delta":
-                    full_text += event.delta
-                    yield event.delta
-                elif event.type == "response.completed":
-                    response_for_output = event.response
-                    response_id = getattr(response_for_output, "id", "") or ""
-
-            if response_for_output is None:
-                break
-
-            function_calls = _get_function_calls(response_for_output)
-            if not function_calls:
-                break
-
-            tool_outputs = _run_tool_handlers(tool_handlers or {}, function_calls)
-            if history is not None:
-                history.add_tool_calls(function_calls)
-                history.add_tool_outputs(tool_outputs)
-                kwargs = {
-                    "model": model,
-                    "input": _history_to_api_input(history),
-                    "stream": True,
-                    "tools": tools,
-                }
-                if instructions:
-                    kwargs["instructions"] = instructions
-            else:
-                kwargs = {
-                    "model": model,
-                    "input": tool_outputs,
-                    "previous_response_id": response_for_output.id,
-                    "stream": True,
-                    "tools": tools,
-                }
-                if instructions:
-                    kwargs["instructions"] = instructions
-            rounds += 1
-
-        if history is not None:
-            history.add_message("assistant", full_text)
-        return full_text, response_id
-
-
-# Backward-compatible alias.
-ChatClient = OpenAIChatClient
-
-
-# ---------------------------------------------------------------------------
-# Ollama implementation
-# ---------------------------------------------------------------------------
-
-
 class OllamaChatClient(BaseChatClient):
     """Chat client that calls Ollama's /api/chat endpoint via HTTP.
 
@@ -402,12 +149,8 @@ class OllamaChatClient(BaseChatClient):
     ``OpenAIChatClient``.
     """
 
-    def __init__(self, base_url: str = "http://localhost:11434") -> None:
+    def __init__(self, base_url: str) -> None:
         self._base_url = base_url.rstrip("/")
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _build_messages(
         self,
@@ -437,10 +180,6 @@ class OllamaChatClient(BaseChatClient):
             return _history_to_ollama_messages(history)
         return messages
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def send_message(
         self,
         user_input: str,
@@ -457,6 +196,11 @@ class OllamaChatClient(BaseChatClient):
         ``OpenAIChatClient.send_message``.
         """
         messages = self._build_messages(user_input, instructions, history)
+
+        with open("messages.json", "w") as f:
+            json.dump(messages, f, indent=2)
+            print("messages written to messages.json")
+   
 
         rounds = 0
         assistant_text = ""
@@ -517,7 +261,13 @@ class OllamaChatClient(BaseChatClient):
             Incremental text chunks from the assistant.
         """
         messages = self._build_messages(user_input, instructions, history)
+        
+        messages_path = os.path.expanduser("~/projects/s3/asksh/messages.json")
+        with open(messages_path, "w") as f:
+            json.dump(messages, f, indent=2)
+            # print(f"messages written to {messages_path}")
 
+       
         full_text = ""
         rounds = 0
 
