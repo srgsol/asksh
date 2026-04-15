@@ -26,13 +26,17 @@ cat error.log | python app.py -c "what went wrong?"
 """
 
 from __future__ import annotations
+from enum import Enum
+import os
 
 import argparse
 from dataclasses import dataclass
+import json
+import re
 import sys
 
-from asksh.sysprompt import (LINUX_ASSISTANT_SYSTEM_PROMPT, LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT, LINUX_ASSISTANT_SYSTEM_PROMPT_DEBUG, LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN)
-from asksh.client import DEFAULT_MODEL, OllamaChatClient
+from asksh.sysprompt import (LINUX_ASSISTANT_SYSTEM_PROMPT, LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT, LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN)
+from asksh.client import DEFAULT_MODEL, OllamaChatClient, _history_to_ollama_messages
 from asksh.history import ConversationHistory
 
 
@@ -96,6 +100,14 @@ def parse_args() -> argparse.Namespace:
     args.query_text = query_text
     return args
 
+
+class AgentMode(Enum):
+    COMMAND = 1
+    EXPLAIN = 2
+    DEBUG = 3
+    CHAT = 4
+
+
 @dataclass
 class Response:
     user_query: str
@@ -103,8 +115,30 @@ class Response:
     reasoning: str
     command: str
     is_destructive: bool
-    optional_command: str
+    # optional_command: str
     explanation: str
+
+
+def extract_json_object(response: str) -> dict | None:
+    """Parse the JSON object inside a ```json ... ``` fence, or None."""
+    match = re.search(r"```json\s*\r?\n(.*?)```", response, re.DOTALL)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def extract_json_response(response: str) -> Response | None:
+    obj = extract_json_object(response)
+    if obj is None:
+        return None
+    try:
+        return Response(**obj)
+    except TypeError:
+        return None
 
 
 def print_assistant_reply(
@@ -113,11 +147,66 @@ def print_assistant_reply(
     model: str,
     stream: bool,
     user_input: str,
+    interaction_mode: AgentMode,
 ) -> None:
     is_tty = sys.stdout.isatty()
     prefix = f"{_PURPLE}>{_RST} " if is_tty else "> "
     print(prefix, end="", flush=True)
 
+    if interaction_mode == AgentMode.COMMAND:
+        _print_command_reply(client, history, model, stream, user_input)
+    elif interaction_mode == AgentMode.DEBUG:
+        _print_debug_reply(client, history, model, stream, user_input)
+    else:
+        _print_free_text_reply(client, history, model, stream, user_input)
+
+
+def _collect_assistant_text(
+    client: OllamaChatClient,
+    history: ConversationHistory,
+    model: str,
+    stream: bool,
+    user_input: str,
+) -> str:
+    if stream:
+        gen = client.stream_message(user_input, model=model, history=history)
+        response_content = ""
+        try:
+            while True:
+                chunk = next(gen)
+                response_content += chunk
+        except StopIteration:
+            pass
+        return response_content
+    reply, _ = client.send_message(user_input, model=model, history=history)
+    return reply
+
+
+def _print_debug_reply(
+    client: OllamaChatClient,
+    history: ConversationHistory,
+    model: str,
+    stream: bool,
+    user_input: str,
+) -> None:
+    text = _collect_assistant_text(client, history, model, stream, user_input)
+    obj = extract_json_object(text)
+    if obj is None:
+        print(
+            f"Error: failed to extract JSON from model output:\n{text}",
+            file=sys.stderr,
+        )
+        return
+    print(json.dumps(obj, indent=2))
+
+
+def _print_free_text_reply(
+    client: OllamaChatClient,
+    history: ConversationHistory,
+    model: str,
+    stream: bool,
+    user_input: str,
+) -> None:
     if stream:
         gen = client.stream_message(user_input, model=model, history=history)
         try:
@@ -129,8 +218,27 @@ def print_assistant_reply(
         print()
     else:
         reply, _ = client.send_message(user_input, model=model, history=history)
-        response = Response(**json.loads(reply))
-        print(response.command)
+        print(reply)
+
+
+def _print_command_reply(
+    client: OllamaChatClient,
+    history: ConversationHistory,
+    model: str,
+    stream: bool,
+    user_input: str,
+) -> None:
+    text = _collect_assistant_text(client, history, model, stream, user_input)
+    parsed = extract_json_response(text)
+    if parsed is None:
+        print(
+            f"Error: failed to extract JSON command from model output:\n{text}",
+            file=sys.stderr,
+        )
+        return
+    # command = parsed.command or parsed.optional_command or parsed.explanation
+    command = parsed.command or parsed.explanation
+    print(command)
 
 
 def chat_loop(
@@ -151,7 +259,9 @@ def chat_loop(
         print(f"Chatting with model '{model}'. Type 'exit' or Ctrl-C to quit.\n")
 
     if initial_query:
-        print_assistant_reply(client, history, model, stream, initial_query)
+        print_assistant_reply(
+            client, history, model, stream, initial_query, interaction_mode=AgentMode.CHAT
+        )
 
     while True:
         try:
@@ -174,7 +284,9 @@ def chat_loop(
             print(goodbye)
             break
 
-        print_assistant_reply(client, history, model, stream, user_input)
+        print_assistant_reply(
+            client, history, model, stream, user_input, interaction_mode=AgentMode.CHAT
+        )
 
 
 def _read_piped_stdin() -> str | None:
@@ -191,7 +303,7 @@ def _build_query(query_text: str, piped: str | None) -> str:
         return query_text
     if not query_text:
         return piped
-    return f"<stdin>{piped}</stdin>Use <stdin> as context to generate the command.{query_text}"
+    return f"<stdin>{piped}</stdin>{query_text}"
     # return f'{{"context": "{piped}", "query": "{query_text}"}}'
 
 
@@ -203,8 +315,6 @@ def main() -> None:
         system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT
     elif args.explain:
         system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN
-    elif args.debug:
-        system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT_DEBUG
     else:
         system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT
     history = ConversationHistory(system_prompt=args.system or system_prompt)
@@ -229,13 +339,25 @@ def main() -> None:
             if not query:
                 print("Error: provide a query or pipe input.", file=sys.stderr)
                 sys.exit(1)
+            if args.explain:
+                one_shot_mode: AgentMode = AgentMode.EXPLAIN
+            elif args.debug:
+                one_shot_mode = AgentMode.DEBUG
+            else:
+                one_shot_mode = AgentMode.COMMAND
             print_assistant_reply(
                 client,
                 history,
                 args.model,
                 stream,
                 query,
+                interaction_mode=one_shot_mode,
             )
+        # Write the history to a file
+        history_path = os.path.expanduser("~/projects/s3/asksh/history.json")
+        with open(history_path, "w") as f:
+            history_dict = _history_to_ollama_messages(history)
+            json.dump(history_dict, f, indent=2)
     except Exception as exc:
         print(f"\nError: {exc}", file=sys.stderr)
         sys.exit(1)

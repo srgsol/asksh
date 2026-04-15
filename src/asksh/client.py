@@ -197,9 +197,10 @@ class OllamaChatClient(BaseChatClient):
         """
         messages = self._build_messages(user_input, instructions, history)
 
-        with open("messages.json", "w") as f:
+        messages_path = os.path.expanduser("~/projects/s3/asksh/messages.json")
+        with open(messages_path, "w") as f:
             json.dump(messages, f, indent=2)
-            print("messages written to messages.json")
+            # print("messages written to messages.json")
    
 
         rounds = 0

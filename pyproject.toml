@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "jau"
 version = "0.1.0"
@@ -7,3 +11,6 @@ requires-python = ">=3.10, <3.11"
 dependencies = [
     "requests>=2.32.5",
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]
