@@ -1,16 +1,20 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["flit_core >=3.11,<4"]
+build-backend = "flit_core.buildapi"
 
 [project]
-name = "jau"
+name = "asksh"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI-powered CLI tool that converts natural language into Linux shell commands."
 readme = "README.md"
 requires-python = ">=3.10, <3.11"
 dependencies = [
     "requests>=2.32.5",
+    "rich>=15.0.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.8",
+]

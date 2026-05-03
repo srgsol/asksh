@@ -247,6 +247,7 @@ def chat_loop(
     model: str,
     stream: bool,
     initial_query: str | None = None,
+    context: str | None = None,
 ) -> None:
     is_tty = sys.stdout.isatty()
     if is_tty:
