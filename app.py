@@ -305,11 +305,6 @@ def main() -> None:
                 stream,
                 query,
             )
-        # Write the history to a file
-        history_path = os.path.expanduser("~/projects/s3/asksh/history.json")
-        with open(history_path, "w") as f:
-            history_dict = _history_to_ollama_messages(history)
-            json.dump(history_dict, f, indent=2)
     except Exception as exc:
         print(f"\nError: {exc}", file=sys.stderr)
         sys.exit(1)
