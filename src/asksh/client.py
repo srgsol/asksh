@@ -1,4 +1,4 @@
-"""Chat client implementations: OpenAI Response API and Ollama /api/chat."""
+"""Ollama ``/api/chat`` HTTP client."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import sys
-from abc import ABC, abstractmethod
 from collections.abc import Generator
 
 import requests
@@ -61,10 +60,6 @@ class OllamaChatClient:
         """Send a message (non-streaming) and return ``(assistant_text, "")``."""
         messages = self._build_messages(user_input, instructions, history)
 
-        messages_path = os.path.expanduser("~/projects/s3/asksh/messages.json")
-        with open(messages_path, "w") as f:
-            json.dump(messages, f, indent=2)
-
         payload: dict = {"model": model, "messages": messages, "stream": False}
         resp = requests.post(f"{self._base_url}/api/chat", json=payload, timeout=120)
         resp.raise_for_status()
@@ -86,10 +81,6 @@ class OllamaChatClient:
     ) -> Generator[str, None, tuple[str, str]]:
         """Stream a response (NDJSON), yielding text deltas as they arrive."""
         messages = self._build_messages(user_input, instructions, history)
-
-        messages_path = os.path.expanduser("~/projects/s3/asksh/messages.json")
-        with open(messages_path, "w") as f:
-            json.dump(messages, f, indent=2)
 
         full_text = ""
         payload: dict = {"model": model, "messages": messages, "stream": True}
