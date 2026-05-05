@@ -26,7 +26,7 @@ ollama pull qwen2.5-coder
 **From PyPI:**
 
 ```bash
-pip install asksh
+pipx install asksh
 # or: uv tool install asksh
 ```
 
