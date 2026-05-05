@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from collections.abc import Generator
 
@@ -19,8 +18,8 @@ if not logger.handlers:
     logger.addHandler(_stdout)
     logger.setLevel(logging.INFO)
 
-DEFAULT_MODEL: str = "qwen2.5-coder"
-
+DEFAULT_OLLAMA_MODEL: str = "qwen2.5-coder"
+DEFAULT_OLLAMA_BASE_URL: str = "http://localhost:11434"
 
 def _history_to_ollama_messages(history: ConversationHistory) -> list[dict]:
     """Convert conversation history to the messages list Ollama /api/chat expects."""
@@ -30,7 +29,7 @@ def _history_to_ollama_messages(history: ConversationHistory) -> list[dict]:
 class OllamaChatClient:
     """Chat client that calls Ollama's /api/chat endpoint via HTTP."""
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str = DEFAULT_OLLAMA_BASE_URL) -> None:
         self._base_url = base_url.rstrip("/")
 
     def _build_messages(
@@ -53,7 +52,7 @@ class OllamaChatClient:
         self,
         user_input: str,
         *,
-        model: str = DEFAULT_MODEL,
+        model: str = DEFAULT_OLLAMA_MODEL,
         instructions: str | None = None,
         history: ConversationHistory | None = None,
     ) -> tuple[str, str]:
@@ -75,7 +74,7 @@ class OllamaChatClient:
         self,
         user_input: str,
         *,
-        model: str = DEFAULT_MODEL,
+        model: str = DEFAULT_OLLAMA_MODEL,
         instructions: str | None = None,
         history: ConversationHistory | None = None,
     ) -> Generator[str, None, tuple[str, str]]:
