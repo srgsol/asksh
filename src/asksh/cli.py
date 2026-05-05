@@ -1,35 +1,32 @@
 """Command-line chat with Ollama using conversation history.
 
-# interactive chat (streaming)
-python app.py -c
+# interactive chat (streaming): no args, or -c
+asksh
+
+asksh -c
 
 # single query and exit
-python app.py "What is 2+2?"
+asksh "What is 2+2?"
 
 # pick a different model
-python app.py --model gemma3 -c
-
-# add a system prompt
-python app.py --system "You are a concise assistant." -c
-
-# non-streaming (full reply at once)
-python app.py --no-stream "Explain TCP"
+asksh --model gemma3 -c
 
 # custom Ollama server
-python app.py --base-url http://192.168.1.10:11434 "Hello"
+asksh --base-url http://192.168.1.10:11434 "Hello"
 
 # pipe stdin as context
-cat data.json | python app.py "use jq to count the items key"
+cat data.json | asksh "use jq to count the items key"
 
 # pipe + interactive chat (stdin context becomes the first message)
-cat error.log | python app.py -c "what went wrong?"
+cat error.log | asksh -c "what went wrong?"
+
+Equivalent: ``python -m asksh`` (same flags as the ``asksh`` console script).
 """
 
 from __future__ import annotations
-import os
 
 import argparse
-import json
+import os
 import sys
 
 from rich.console import Console
@@ -38,9 +35,14 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
-from asksh.sysprompt import (LINUX_ASSISTANT_SYSTEM_PROMPT, LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT, LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN)
-from asksh.client import DEFAULT_MODEL, OllamaChatClient, _history_to_ollama_messages
+from asksh.client import DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_BASE_URL, OllamaChatClient
+from asksh.config import default_config_path, load_user_config
 from asksh.history import ConversationHistory
+from asksh.sysprompt import (
+    LINUX_ASSISTANT_SYSTEM_PROMPT,
+    LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT,
+    LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN,
+)
 
 
 _console = Console(highlight=False)
@@ -48,24 +50,25 @@ _SPINNER_STYLE = "bright_cyan"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Chat with an Ollama model.")
+    arg_defaults, _ = load_user_config()
+    parser = argparse.ArgumentParser(
+        prog="asksh",
+        description=(
+            "Chat with an Ollama model. Optional defaults are read from "
+            f"{default_config_path()} (set ASKSH_CONFIG to use another file)."
+        ),
+    )
     parser.add_argument(
         "-c",
         "--chat",
         action="store_true",
-        help="Run interactive chat loop. If omitted, QUERY is required (one shot).",
+        help="Run interactive chat loop (also the default when QUERY is omitted).",
     )
     parser.add_argument(
         "-e",
         "--explain",
         action="store_true",
         help="Explain the answer.",
-    )
-    parser.add_argument(
-        "-d",
-        "--debug",
-        action="store_true",
-        help="Debug the answer.",
     )
     parser.add_argument(
         "-f",
@@ -75,36 +78,28 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=DEFAULT_MODEL,
-        help=f"Ollama model to use (default: {DEFAULT_MODEL})",
+        default=DEFAULT_OLLAMA_MODEL,
+        help=f"Ollama model to use (default: {DEFAULT_OLLAMA_MODEL}; config file may override).",
     )
     parser.add_argument(
         "--base-url",
-        default="http://localhost:11434",
-        help="Ollama server base URL (default: http://localhost:11434)",
-    )
-    parser.add_argument(
-        "--system",
-        default=None,
-        metavar="PROMPT",
-        help="Optional system prompt.",
-    )
-    parser.add_argument(
-        "--no-stream",
-        action="store_true",
-        help="Disable streaming; print the full reply at once.",
+        default=DEFAULT_OLLAMA_BASE_URL,
+        help=f"Ollama server base URL (default: {DEFAULT_OLLAMA_BASE_URL}; config file may override).",
     )
     parser.add_argument(
         "query",
         nargs="*",
         metavar="QUERY",
-        help="Prompt to send once and exit (required unless --chat).",
+        help="Prompt for one-shot mode; if omitted, interactive chat runs.",
     )
+    parser.set_defaults(**arg_defaults)
     args = parser.parse_args()
 
     # Validate Query
     query_text = " ".join(args.query).strip()
     args.query_text = query_text
+    if not query_text:
+        args.chat = True
 
     # Validate Context File
     if args.context:
@@ -249,18 +244,21 @@ def _read_piped_stdin() -> str | None:
 
 
 def _build_query(query_text: str, piped: str | None, context_file_name: str | None) -> str:
-    """Combine piped stdin context with the CLI query."""
-    if not piped and not context_file_name:
-        return query_text
-    if not query_text:
-        return piped or context_file_name
+    """Combine context file, piped stdin, and query text."""
+    parts: list[str] = []
+
     if piped:
-        return f"<stdin>{piped}</stdin>{query_text}"
+        parts.append(f"<stdin>{piped}</stdin>")
+
     if context_file_name:
-        with open(context_file_name, "r") as f:
+        with open(context_file_name, "r", encoding="utf-8") as f:
             context = f.read()
-        return f"<context>File: {context_file_name}\nContext: {context}</context>{query_text}"
-    return query_text
+        parts.append(f"<context>\nFile: {context_file_name}\nFile content:\n{context}</context>")
+
+    if query_text:
+        parts.append(query_text)
+
+    return "\n".join(parts)
 
 
 def main() -> None:
@@ -276,12 +274,11 @@ def main() -> None:
     else:
         system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT
         stream = False
-    history = ConversationHistory(system_prompt=args.system or system_prompt)
+    history = ConversationHistory(system_prompt=system_prompt)
     client = OllamaChatClient(base_url=args.base_url)
 
-    # query = _build_query(args.query_text, piped, args.context)
     query = _build_query(args.query_text, piped, args.context)
-
+    # print(query)
     try:
         if args.chat:
             if piped:

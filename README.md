@@ -13,42 +13,51 @@ $ asksh compress a directory with tar.gz excluding the .cache directory
 
 ## Installation
 
-### Ollama Server
+### Ollama server
 
-`asksh` requires the **ollama** server running on your machine. [Install ollama here](https://ollama.com/download).
-
-Pull the model used by `asksh` by running:
+`asksh` expects an **Ollama** server. [Install Ollama](https://ollama.com/download), then pull a model (defaults match `config.example.toml`):
 
 ```bash
-$ ollama pull qwen2.5-coder
+ollama pull qwen2.5-coder
 ```
 
-### System requirements
+### Install the CLI
 
-- **Python 3.10** 
-- Package manager: [**uv**](https://docs.astral.sh/uv/) 
-
-### Download asksh
-
-Clone this repository and install dependencies from the project root:
+**From PyPI:**
 
 ```bash
-$ git clone git@github.com:srgsol/asksh.git
-$ cd asksh
-$ uv sync
+pip install asksh
+# or: uv tool install asksh
 ```
 
-### Add 'asksh' to your PATH
-
-Locate the `asksh.sh` script in your local repository and create a symlink to the `asksh` script in your `PATH` (e.g. `~/.local/bin`). 
+**From a clone** (development):
 
 ```bash
-ln -sf "$(realpath path/to/asksh/asksh.sh)" ~/.local/bin/asksh
+git clone git@github.com:srgsol/asksh.git
+cd asksh
+uv sync
+uv run asksh --help
 ```
 
-Be sure that `~/.local/bin` is in your `PATH`.
+Requires **Python 3.10+**.
+
+### Configuration (optional defaults)
+
+Defaults can live in a TOML file so you do not repeat `--model` / `--base-url` on every run. CLI flags always override the file.
+
+- **Default path:** `$XDG_CONFIG_HOME/asksh/config.toml`, or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset.
+- **Override path:** set `ASKSH_CONFIG` to another file.
+
+See `config.example.toml` in this repository. The config file currently applies **`model`** and **`base_url`** only (CLI flags still override them). Use **`--context`** on the command line for a context file path; there is no `context` key in the TOML.
+
+## Publishing to PyPI (maintainers)
+
+This project uses [flit](https://flit.pypa.io/) as the build backend. With `flit` installed and PyPI credentials configured:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
+uv build
+# inspect dist/ then:
+flit publish
 ```
 
+Use [trusted publishing](https://docs.pypi.org/trusted-publishers/) (e.g. GitHub Actions) for releases when possible.

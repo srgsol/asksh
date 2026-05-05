@@ -9,3 +9,9 @@ wheels/
 # Virtual environments
 .venv
 .vscode
+
+# Temporary files
+tmp/
+
+# Environment variables
+.env

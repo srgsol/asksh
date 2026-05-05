@@ -1,0 +1,9 @@
+# Copy to ~/.config/asksh/config.toml (or set ASKSH_CONFIG to this file's path).
+# CLI flags always override these values.
+
+model = "qwen2.5-coder"
+base_url = "http://localhost:11434"
+
+
+
+
