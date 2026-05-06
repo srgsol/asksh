@@ -35,7 +35,9 @@ class ConversationHistory:
 
     def add_message(self, role: str, content: str) -> None:
         if role not in ("user", "assistant", "system"):
-            raise ValueError(f"Invalid role: {role!r}. Must be 'user', 'assistant', or 'system'.")
+            raise ValueError(
+                f"Invalid role: {role!r}. Must be 'user', 'assistant', or 'system'."
+            )
         self._items.append(Message(role=role, content=content))
 
     def get_items(self) -> list[Message]:

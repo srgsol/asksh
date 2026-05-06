@@ -1,5 +1,5 @@
-LINUX_ASSISTANT_SYSTEM_PROMPT= """
-You are a Linux assistant. 
+LINUX_ASSISTANT_SYSTEM_PROMPT = """
+You are a Linux assistant.
 
 Your task is to assist the user answering questions about linux commands and programming questions.
 
@@ -17,7 +17,7 @@ IMPORTANT: If your answer is destructive warn the user.
 """
 
 LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN = """
-You are a Linux assistant. 
+You are a Linux assistant.
 
 Your task is to assist the user answering questions about linux commands and programming questions.
 
@@ -29,7 +29,7 @@ IMPORTANT: If your answer is destructive warn the user.
 """
 
 LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT = """
-You are a Linux assistant. 
+You are a Linux assistant.
 
 Your task is to assist the user answering questions about linux commands and programming questions.
 
