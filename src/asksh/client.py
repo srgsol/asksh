@@ -21,6 +21,7 @@ if not logger.handlers:
 DEFAULT_OLLAMA_MODEL: str = "qwen2.5-coder"
 DEFAULT_OLLAMA_BASE_URL: str = "http://localhost:11434"
 
+
 def _history_to_ollama_messages(history: ConversationHistory) -> list[dict]:
     """Convert conversation history to the messages list Ollama /api/chat expects."""
     return [{"role": m.role, "content": m.content} for m in history.get_items()]
