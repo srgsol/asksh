@@ -35,6 +35,7 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
+from asksh import __version__
 from asksh.client import DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_BASE_URL, OllamaChatClient
 from asksh.config import default_config_path, load_user_config
 from asksh.history import ConversationHistory
@@ -57,6 +58,12 @@ def parse_args() -> argparse.Namespace:
             "Chat with an Ollama model. Optional defaults are read from "
             f"{default_config_path()} (set ASKSH_CONFIG to use another file)."
         ),
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "-c",
@@ -243,7 +250,9 @@ def _read_piped_stdin() -> str | None:
     return content.strip() or None
 
 
-def _build_query(query_text: str, piped: str | None, context_file_name: str | None) -> str:
+def _build_query(
+    query_text: str, piped: str | None, context_file_name: str | None
+) -> str:
     """Combine context file, piped stdin, and query text."""
     parts: list[str] = []
 
@@ -253,7 +262,9 @@ def _build_query(query_text: str, piped: str | None, context_file_name: str | No
     if context_file_name:
         with open(context_file_name, "r", encoding="utf-8") as f:
             context = f.read()
-        parts.append(f"<context>\nFile: {context_file_name}\nFile content:\n{context}</context>")
+        parts.append(
+            f"<context>\nFile: {context_file_name}\nFile content:\n{context}</context>"
+        )
 
     if query_text:
         parts.append(query_text)
