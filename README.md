@@ -1,4 +1,4 @@
-# asksh
+# ❯_ asksh
 
 [![PyPI](https://img.shields.io/pypi/v/asksh)](https://pypi.org/project/asksh/)
 [![Python](https://img.shields.io/pypi/pyversions/asksh)](https://pypi.org/project/asksh/)
@@ -8,14 +8,14 @@
 
 `asksh` is an AI-powered CLI that lets you describe what you want in plain English and get practical terminal guidance. In its default one-shot mode it replies with a concise Linux command. In explain or chat modes it can also provide short explanations or broader programming help.
 
-You don't need to leave your terminal to get things done. Don't remember the exact `tar` flags? Ask `asksh`.
+You don't need to leave your terminal to get things done. Don't remember the exact `tar` flags? <span>ask</span><span style="color:#00ff66;">sh</span>.
 
 ```bash
 $ asksh "compress a directory as tar.gz excluding the .cache directory"
 tar -czf archive.tar.gz --exclude=.cache my_directory
 ```
 
-## Important features
+## Important feature
 
 - **Stay in the terminal:** describe what you need in plain language and get a shell command (or a short explanation) without switching to a browser or another app.
 - **Local model, low cost:** [Ollama](https://ollama.com/) with the default **`qwen2.5-coder`** is enough for most day-to-day terminal tasks—no API keys or token spend on large cloud providers.
