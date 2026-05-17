@@ -1,6 +1,7 @@
 """Command-line chat with Ollama using conversation history.
 
 # interactive chat (streaming): no args, or -c
+# In chat, end a line with \\ then Enter to continue on the next line.
 asksh
 
 asksh -c
@@ -29,6 +30,13 @@ import argparse
 import os
 import sys
 
+# Hook GNU readline for ``input()`` so chat mode gets arrow-key editing and
+# history (otherwise many terminals only get primitive line editing).
+try:
+    import readline  # noqa: F401
+except ImportError:
+    pass
+
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -53,6 +61,44 @@ from asksh.sysprompt import (
 
 _console = Console(highlight=False)
 _SPINNER_STYLE = "bright_cyan"
+
+
+def _read_chat_user_input(is_tty: bool) -> str:
+    """Read one user message; a line ending with an odd number of ``\\`` (after
+    stripping trailing spaces/tabs) continues on the next physical line.
+
+    Pairs of trailing backslashes become one literal ``\\`` in the stored line;
+    a lone trailing backslash is dropped and joins the next line (shell-like).
+    """
+    chunks: list[str] = []
+    first = True
+    while True:
+        if is_tty:
+            if first:
+                _console.print(Text("\n>>> ", style="bright_cyan"), end="")
+            else:
+                _console.print(Text("... ", style="grey50"), end="")
+            line = input()
+        else:
+            line = input("\n>>> " if first else "\n... ")
+
+        tail = line.rstrip(" \t")
+        n_backslashes = 0
+        for i in range(len(tail) - 1, -1, -1):
+            if tail[i] == "\\":
+                n_backslashes += 1
+            else:
+                break
+
+        if n_backslashes % 2 == 1:
+            chunks.append(tail[:-1])
+            first = False
+            continue
+
+        chunks.append(line)
+        break
+
+    return "\n".join(chunks).strip()
 
 
 def parse_args() -> argparse.Namespace:
@@ -199,7 +245,11 @@ def chat_loop(
         intro = Text()
         intro.append("Chatting with model ", style="grey50")
         intro.append(model, style="bright_cyan")
-        intro.append(". Type exit or Ctrl-C to quit.", style="grey50")
+        intro.append(
+            ". Type exit or Ctrl-C to quit.\n"
+            "End a line with \\ then Enter to add more lines.",
+            style="grey50",
+        )
         _console.print(
             Panel(
                 intro,
@@ -209,7 +259,11 @@ def chat_loop(
             )
         )
     else:
-        print(f"Chatting with model '{model}'. Type 'exit' or Ctrl-C to quit.\n")
+        print(
+            f"Chatting with model '{model}'. "
+            "Type 'exit' or Ctrl-C to quit.\n"
+            "End a line with \\ then Enter to add more lines. "
+        )
 
     if initial_query:
         print_assistant_reply(
@@ -222,11 +276,7 @@ def chat_loop(
 
     while True:
         try:
-            if is_tty:
-                _console.print(Text("\n>>> ", style="bright_cyan"), end="")
-                user_input = input().strip()
-            else:
-                user_input = input("\n>>> ").strip()
+            user_input = _read_chat_user_input(is_tty)
         except (EOFError, KeyboardInterrupt):
             _console.print("\nGoodbye!", style="grey50")
             break
