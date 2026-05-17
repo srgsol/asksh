@@ -22,6 +22,25 @@ DEFAULT_OLLAMA_MODEL: str = "qwen2.5-coder"
 DEFAULT_OLLAMA_BASE_URL: str = "http://localhost:11434"
 
 
+def is_ollama_server_running(base_url: str) -> bool:
+    """Return True if the Ollama server is running."""
+    try:
+        resp = requests.get(base_url, timeout=3)
+    except (OSError, requests.RequestException):
+        return False
+    return resp.ok
+
+
+def is_ollama_model_available(base_url: str, model: str) -> bool:
+    """Return True if the Ollama model is available."""
+    try:
+        payload = {"model": model, "prompt": "Hi!", "stream": False}
+        resp = requests.post(f"{base_url}/api/chat", json=payload, timeout=3)
+        return resp.ok
+    except (OSError, requests.RequestException):
+        return False
+
+
 def _history_to_ollama_messages(history: ConversationHistory) -> list[dict]:
     """Convert conversation history to the messages list Ollama /api/chat expects."""
     return [{"role": m.role, "content": m.content} for m in history.get_items()]
