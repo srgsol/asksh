@@ -8,7 +8,7 @@
 
 `asksh` is an AI-powered CLI that lets you describe what you want in plain English and get practical terminal guidance. In its default one-shot mode it replies with a concise Linux command. In explain or chat modes it can also provide short explanations or broader programming help.
 
-You don't need to leave your terminal to get things done. Don't remember the exact `tar` flags? <span>ask</span><span style="color:#00ff66;">sh</span>.
+You don't need to leave your terminal to get things done. Don't remember the exact `tar` flags? ask**sh**
 
 ```bash
 $ asksh "compress a directory as tar.gz excluding the .cache directory"
