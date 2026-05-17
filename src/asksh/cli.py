@@ -33,6 +33,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from asksh.ollama import verify_ollama_status
+
 if TYPE_CHECKING:
     from prompt_toolkit import PromptSession
 
@@ -52,8 +54,6 @@ from asksh.client import (
     DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_OLLAMA_MODEL,
     OllamaChatClient,
-    is_ollama_model_available,
-    is_ollama_server_running,
 )
 from asksh.config import default_config_path, load_user_config
 from asksh.history import ConversationHistory
@@ -395,39 +395,13 @@ def _build_query(
 
 def main() -> None:
     args = parse_args()
-    if not is_ollama_server_running(args.base_url):
-        base = args.base_url.rstrip("/")
-        lines = [
-            f"\nError: cannot reach Ollama at {base}.",
-            "",
-            "Ollama is required to run this the AI model used by asksh.",
-            "",
-            "Ollama installation:",
-            "",
-            "\t- Install Ollama: https://ollama.com/download",
-            "\t- Pull the Ollama model: `ollama pull qwen2.5-coder`",
-            "\t- Check Ollama is running fine: `ollama run qwen2.5-coder`",
-            "",
-            "Ollama configuration:",
-            "",
-            "\t- Set your Ollama server URL in your ~/.config/asksh/config.toml file:",
-            '\t  base_url = "http://HOST:PORT"',
-            "",
-            '\t  Where HOST is the host of your Ollama server and PORT is the port it is listening on. Example: base_url = "http://localhost:11434"',
-        ]
-        print("\n".join(lines), file=sys.stderr)
+
+    try:
+        verify_ollama_status(required_model=args.model, base_url=args.base_url)
+    except RuntimeError as e:
+        print(e, file=sys.stderr)
         sys.exit(1)
-    if not is_ollama_model_available(base_url=args.base_url, model=args.model):
-        lines = [
-            f"\nError: Missing Ollama model {args.model}.",
-            "",
-            "Ollama model installation:",
-            "",
-            "\t- Pull the Ollama model: `ollama pull qwen2.5-coder`",
-            "",
-        ]
-        print("\n".join(lines), file=sys.stderr)
-        sys.exit(1)
+
     piped = _read_piped_stdin()
 
     if args.chat:
