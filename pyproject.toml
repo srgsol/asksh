@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "asksh"
-version = "0.2.1"
+version = "0.2.2"
 description = "AI-powered CLI tool that converts natural language into Linux shell commands."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
+    "prompt-toolkit>=3.0.43,<4",
     "requests>=2.32.5",
     "rich>=15.0.0",
     "tomli>=2.0.1; python_version < '3.11'",

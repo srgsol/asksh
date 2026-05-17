@@ -1,7 +1,8 @@
 """Command-line chat with Ollama using conversation history.
 
 # interactive chat (streaming): no args, or -c
-# In chat, end a line with \\ then Enter to continue on the next line.
+# In a TTY, chat uses a multiline editor (Enter = newline, Alt+Enter to send).
+# Without a TTY, end a line with \\ then Enter to continue on the next line.
 asksh
 
 asksh -c
@@ -29,14 +30,17 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-# Hook GNU readline for ``input()`` so chat mode gets arrow-key editing and
-# history (otherwise many terminals only get primitive line editing).
-try:
-    import readline  # noqa: F401
-except ImportError:
-    pass
+if TYPE_CHECKING:
+    from prompt_toolkit import PromptSession
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -62,25 +66,76 @@ from asksh.sysprompt import (
 _console = Console(highlight=False)
 _SPINNER_STYLE = "bright_cyan"
 
+# Lazily created so one-shot ``asksh "query"`` does not import prompt_toolkit.
+_chat_prompt_session: PromptSession | None = None
 
-def _read_chat_user_input(is_tty: bool) -> str:
-    """Read one user message; a line ending with an odd number of ``\\`` (after
-    stripping trailing spaces/tabs) continues on the next physical line.
 
-    Pairs of trailing backslashes become one literal ``\\`` in the stored line;
-    a lone trailing backslash is dropped and joins the next line (shell-like).
+def _chat_history_path() -> Path:
+    base = os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+    path = Path(base) / "asksh" / "chat_history"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _read_chat_user_input_prompt_toolkit() -> str:
+    """TTY chat input: true multiline buffer, correct cursor/backspace, history."""
+    global _chat_prompt_session
+
+    if _chat_prompt_session is None:
+        # Define custom key bindings to force immediate send via Enter
+        bindings = KeyBindings()
+
+        @bindings.add("c-m")  # 'c-m' maps directly to the standard Enter key
+        def _(event):
+            """Pressing Enter submits the text immediately."""
+            event.current_buffer.validate_and_handle()
+
+        @bindings.add("escape", "enter")  # Maps to Alt+Enter / Esc then Enter
+        def _(event):
+            """Pressing Alt+Enter inserts a clean explicit newline character."""
+            event.current_buffer.insert_text("\n")
+
+        # Connect text formatting colors for your toolbar tags
+        style = Style.from_dict(
+            {
+                "grey": "#808080",  # Explicitly matches a dark grey color token
+            }
+        )
+
+        _chat_prompt_session = PromptSession(
+            history=FileHistory(str(_chat_history_path())),
+            multiline=True,
+            wrap_lines=True,
+            enable_open_in_editor=False,
+            key_bindings=bindings,
+            style=style,
+            prompt_continuation=lambda _pw, _ln, _wc: HTML("<grey>...</grey> "),
+            # bottom_toolbar=lambda: HTML(
+            #     "<grey>Enter to send  Alt+Enter for new line  Ctrl+C cancel </grey>"
+            # ),
+        )
+
+    session = _chat_prompt_session
+    assert session is not None
+    text = session.prompt(HTML("\n<ansicyan>>>> </ansicyan>"))
+    return text.strip()
+
+
+def _read_chat_user_input_line_based() -> str:
+    """Read one user message without prompt_toolkit (e.g. non-TTY stdin).
+
+    A line ending with an odd number of ``\\`` (after stripping trailing
+    spaces/tabs) continues on the next physical line. Pairs of trailing
+    backslashes become one literal ``\\`` in the stored line; a lone trailing
+    backslash is dropped and joins the next line (shell-like).
+
+    Prompts must be passed to ``input()`` as plain text so line editing stays
+    in sync with the terminal (no Rich/ANSI before ``input()``).
     """
     chunks: list[str] = []
     first = True
     while True:
-        if is_tty:
-            if first:
-                _console.print(Text("\n>>> ", style="bright_cyan"), end="")
-            else:
-                _console.print(Text("... ", style="grey50"), end="")
-            line = input()
-        else:
-            line = input("\n>>> " if first else "\n... ")
+        line = input("\n>>> " if first else "\n... ")
 
         tail = line.rstrip(" \t")
         n_backslashes = 0
@@ -99,6 +154,12 @@ def _read_chat_user_input(is_tty: bool) -> str:
         break
 
     return "\n".join(chunks).strip()
+
+
+def _read_chat_user_input(stdin_is_tty: bool) -> str:
+    if stdin_is_tty:
+        return _read_chat_user_input_prompt_toolkit()
+    return _read_chat_user_input_line_based()
 
 
 def parse_args() -> argparse.Namespace:
@@ -240,30 +301,35 @@ def chat_loop(
     initial_query: str | None = None,
     context: str | None = None,
 ) -> None:
-    is_tty = sys.stdout.isatty()
-    if is_tty:
+    stdout_tty = sys.stdout.isatty()
+    stdin_tty = sys.stdin.isatty()
+    if stdout_tty:
         intro = Text()
         intro.append("Chatting with model ", style="grey50")
         intro.append(model, style="bright_cyan")
-        intro.append(
-            ". Type exit or Ctrl-C to quit.\n"
-            "End a line with \\ then Enter to add more lines.",
-            style="grey50",
-        )
+        intro.append("\n- Multiline input: Alt+Enter.", style="grey50")
+        intro.append("\n- Type 'exit' or Ctrl-C to quit.", style="grey50")
+        if not stdin_tty:
+            intro.append(
+                "\nWithout a TTY, use \\ at the end of a line, then Enter, "
+                "to continue on the next line.",
+                style="grey50",
+            )
         _console.print(
             Panel(
                 intro,
                 border_style="grey42",
                 padding=(0, 1),
-                expand=False,
+                expand=True,
             )
         )
     else:
-        print(
+        msg = (
             f"Chatting with model '{model}'. "
             "Type 'exit' or Ctrl-C to quit.\n"
-            "End a line with \\ then Enter to add more lines. "
+            "End a line with \\ then Enter to add more lines.\n"
         )
+        print(msg)
 
     if initial_query:
         print_assistant_reply(
@@ -276,7 +342,7 @@ def chat_loop(
 
     while True:
         try:
-            user_input = _read_chat_user_input(is_tty)
+            user_input = _read_chat_user_input(stdin_tty)
         except (EOFError, KeyboardInterrupt):
             _console.print("\nGoodbye!", style="grey50")
             break
