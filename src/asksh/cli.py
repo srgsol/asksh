@@ -60,17 +60,18 @@ def parse_args() -> argparse.Namespace:
         action="version",
         version=f"%(prog)s {__version__}",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "-c",
         "--chat",
         action="store_true",
         help="Run interactive chat loop (also the default when QUERY is omitted).",
     )
-    parser.add_argument(
+    mode.add_argument(
         "-e",
         "--explain",
         action="store_true",
-        help="Explain the answer.",
+        help="Explain the answer (one-shot; cannot be combined with -c/--chat).",
     )
     parser.add_argument(
         "-f",
@@ -99,7 +100,7 @@ def parse_args() -> argparse.Namespace:
 
     query_text = " ".join(args.query).strip()
     args.query_text = query_text
-    if not query_text:
+    if not query_text and not args.explain:
         args.chat = True
 
     if args.context:
