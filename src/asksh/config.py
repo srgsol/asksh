@@ -12,11 +12,14 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-_ENV_CONFIG_PATH = "ASKSH_CONFIG"
 
-# Keys passed to argparse.set_defaults (CLI always wins when the flag is given).
-_ARG_DEFAULT_KEYS = frozenset({"model", "base_url"})
-_EXTRA_KEYS = frozenset({})
+_VALID_CONFIG_KEYS = frozenset({"MODEL", "BASE_URL"})
+
+# TOML keys -> argparse ``Namespace`` attribute names (``--model``, ``--base-url``).
+_CONFIG_TO_ARG_DEST: dict[str, str] = {
+    "MODEL": "model",
+    "BASE_URL": "base_url",
+}
 
 
 def default_config_path() -> Path:
@@ -27,31 +30,19 @@ def default_config_path() -> Path:
     return Path(base) / "asksh" / "config.toml"
 
 
-def config_path() -> Path:
-    override = os.environ.get(_ENV_CONFIG_PATH, "").strip()
-    if override:
-        return Path(os.path.expanduser(override))
-    return default_config_path()
-
-
-def load_user_config() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Load config file.
-
-    Returns:
-        ``(arg_defaults, extras)`` — ``arg_defaults`` for ``set_defaults``;
-        ``extras`` holds non-argparse options (e.g. ``interactive_on_no_args``).
-    """
-    path = config_path()
+def load_user_config() -> dict[str, Any]:
+    """Load config file defaults for ``argparse.set_defaults``."""
+    path = default_config_path()
     if not path.is_file():
-        return {}, {}
+        return {}
 
     with path.open("rb") as f:
         raw = tomllib.load(f)
 
     if not isinstance(raw, dict):
-        return {}, {}
+        return {}
 
-    unknown = set(raw) - _ARG_DEFAULT_KEYS - _EXTRA_KEYS
+    unknown = set(raw) - _VALID_CONFIG_KEYS
     if unknown:
         print(
             f"Warning: ignoring unknown config keys in {path}: {', '.join(sorted(unknown))}",
@@ -59,27 +50,16 @@ def load_user_config() -> tuple[dict[str, Any], dict[str, Any]]:
         )
 
     arg_defaults: dict[str, Any] = {}
-    for key in _ARG_DEFAULT_KEYS:
+    for key in _VALID_CONFIG_KEYS:
         if key not in raw or raw[key] is None:
             continue
         val = raw[key]
-        if key in ("model", "base_url", "context") and not isinstance(val, str):
+        if not isinstance(val, str):
             print(
                 f"Warning: config key {key!r} must be a string, got {type(val).__name__}; ignoring.",
                 file=sys.stderr,
             )
             continue
-        arg_defaults[key] = val
+        arg_defaults[_CONFIG_TO_ARG_DEST[key]] = val
 
-    extras: dict[str, Any] = {}
-    if "interactive_on_no_args" in raw and raw["interactive_on_no_args"] is not None:
-        v = raw["interactive_on_no_args"]
-        if isinstance(v, bool):
-            extras["interactive_on_no_args"] = v
-        else:
-            print(
-                "Warning: interactive_on_no_args must be a boolean; ignoring.",
-                file=sys.stderr,
-            )
-
-    return arg_defaults, extras
+    return arg_defaults

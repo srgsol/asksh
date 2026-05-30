@@ -15,7 +15,7 @@ $ asksh "compress a directory as tar.gz excluding the .cache directory"
 tar -czf archive.tar.gz --exclude=.cache my_directory
 ```
 
-## Important feature
+## Why asksh
 
 - **Stay in the terminal:** describe what you need in plain language and get a shell command (or a short explanation) without switching to a browser or another app.
 - **Local model, low cost:** [Ollama](https://ollama.com/) with the default **`qwen2.5-coder`** is enough for most day-to-day terminal tasks—no API keys or token spend on large cloud providers.
@@ -77,8 +77,7 @@ Requires **Python 3.10+** and a reachable [Ollama](https://ollama.com/download) 
 
 CLI flags always win. To avoid retyping `--model`/`--base-url` on every run, drop a TOML file at:
 
-- `$XDG_CONFIG_HOME/asksh/config.toml` (or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset), or
-- a custom path pointed to by `ASKSH_CONFIG`.
+- `$XDG_CONFIG_HOME/asksh/config.toml` (or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset).
 
 Only `model` and `base_url` are read from the config file. See [`config.example.toml`](config.example.toml).
 
@@ -152,4 +151,4 @@ cat error.log | asksh -c "what went wrong?"
 
 - **Cannot connect to Ollama:** ensure Ollama is running and reachable at `http://localhost:11434` (or pass `--base-url`).
 - **Model not found:** run `ollama pull qwen2.5-coder` or pass another available model with `--model`.
-- **Config not being used:** verify config path (`$XDG_CONFIG_HOME/asksh/config.toml` or `~/.config/asksh/config.toml`) and check `ASKSH_CONFIG` if set.
+- **Config not being used:** verify config path (`$XDG_CONFIG_HOME/asksh/config.toml` or `~/.config/asksh/config.toml`).
