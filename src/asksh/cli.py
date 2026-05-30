@@ -46,12 +46,12 @@ from asksh.sysprompt import (
 
 
 def parse_args() -> argparse.Namespace:
-    arg_defaults, _ = load_user_config()
+    arg_defaults = load_user_config()
     parser = argparse.ArgumentParser(
         prog="asksh",
         description=(
             "Chat with an Ollama model. Optional defaults are read from "
-            f"{default_config_path()} (set ASKSH_CONFIG to use another file)."
+            f"{default_config_path()}."
         ),
     )
     parser.add_argument(

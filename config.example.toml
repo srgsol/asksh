@@ -1,9 +1,9 @@
-# Copy to ~/.config/asksh/config.toml (or set ASKSH_CONFIG to this file's path).
+# Copy to ~/.config/asksh/config.toml
 # CLI flags always override these values.
 
-model = "qwen2.5-coder"
-base_url = "http://localhost:11434"
+# The LLM model to use.
+# Ollama models library: https://ollama.com/library
+MODEL = "qwen2.5-coder"
 
-
-
-
+# The base URL of the Ollama server.
+BASE_URL = "http://localhost:11434"
