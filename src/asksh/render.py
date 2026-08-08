@@ -7,7 +7,7 @@ from collections.abc import Generator
 
 from rich.console import Console
 from rich.live import Live
-from rich.spinner import Spinner
+from rich.markdown import Markdown
 
 from asksh.client import OllamaChatClient
 from asksh.history import ConversationHistory
@@ -44,23 +44,24 @@ def print_assistant_reply(
             history=history,
         )
         if is_tty:
+            text = ""
             with Live(
-                Spinner("dots", style=_SPINNER_STYLE),
+                Markdown(""),
                 console=console,
                 refresh_per_second=12,
-                transient=True,
-            ):
+                vertical_overflow="visible",
+            ) as live:
                 try:
-                    first_chunk = next(gen)
+                    while True:
+                        chunk = next(gen)
+                        text += chunk
+                        live.update(Markdown(text))
                 except StopIteration:
-                    first_chunk = None
-            if first_chunk is None:
-                print()
-                return
-            sys.stdout.write(first_chunk)
-            sys.stdout.flush()
-        _drain(gen)
-        print()
+                    pass
+            print()
+        else:
+            _drain(gen)
+            print()
     else:
         if is_tty:
             with console.status("", spinner="dots", spinner_style=_SPINNER_STYLE):
@@ -69,7 +70,7 @@ def print_assistant_reply(
                     model=model,
                     history=history,
                 )
-            console.print(reply, markup=False)
+            console.print(Markdown(reply))
         else:
             reply, _ = client.send_message(
                 user_input,
