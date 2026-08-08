@@ -49,7 +49,7 @@ def print_assistant_reply(
                 Markdown(""),
                 console=console,
                 refresh_per_second=12,
-                vertical_overflow="visible",
+                transient=True,
             ) as live:
                 try:
                     while True:
@@ -58,7 +58,8 @@ def print_assistant_reply(
                         live.update(Markdown(text))
                 except StopIteration:
                     pass
-            print()
+            if text:
+                console.print(Markdown(text))
         else:
             _drain(gen)
             print()
