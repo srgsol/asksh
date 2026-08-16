@@ -20,13 +20,15 @@ def build_query(
     parts: list[str] = []
 
     if piped:
-        parts.append(f"<stdin>{piped}</stdin>")
+        parts.append(
+            f"Use the following stdin section as context to answer the question: <stdin>{piped}</stdin>"
+        )
 
     if context_file_name:
         with open(context_file_name, "r", encoding="utf-8") as f:
             context = f.read()
         parts.append(
-            f"<context>\nFile: {context_file_name}\nFile content:\n{context}</context>"
+            f"Use the following file in the context section to answer the question: <context>\nFile: {context_file_name}\nFile content:\n{context}</context>"
         )
 
     if query_text:
