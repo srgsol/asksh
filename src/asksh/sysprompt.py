@@ -14,6 +14,9 @@ instructions below for each type of question.
 - Give your best answer in the most understandable way. May it be code, text, or a combination of both.
 - If there are multiple possible answers, choose the most common one.
 
+## General questions
+- You can answer questions without the need to provide a command or code.
+
 ## How to answer questions
 {answer_instructions}
 
@@ -21,16 +24,16 @@ IMPORTANT: If your answer is destructive warn the user.
 """
 
 ANSWER_ONE_SHOT = """
-- Answer with just a linux command if possible. Consice and to the point. No explanations.
+- Consice and to the point. No explanations.
 """
 
 ANSWER_EXPLAIN = """
-- Answer with a linux command if possible and a short explanation of the command. Consice and to the point.
+- Answer the question and add a short explanation of the answer. Consice and to the point.
 """
 
 ANSWER_CHAT = """
-- Whenever is possible, answer with a linux command and an explanation.
-- Be open to chat without the need to provide a command.
+- Be open to chat about the topic the user is asking about and use your knowledge
+to answer the question in a way that is most understandable to the user.
 """
 
 Modes = Literal["oneshot", "explain", "chat"]
