@@ -14,7 +14,7 @@ from prompt_toolkit.styles import Style
 from rich.panel import Panel
 from rich.text import Text
 
-from asksh.client import OllamaChatClient
+from asksh.client import OllamaChatClient, ThinkOption
 from asksh.history import ConversationHistory
 from asksh.render import console, print_assistant_reply
 
@@ -110,6 +110,9 @@ def chat_loop(
     model: str,
     stream: bool,
     initial_query: str | None = None,
+    *,
+    think: ThinkOption = False,
+    show_thinking: bool = False,
 ) -> None:
     stdout_tty = sys.stdout.isatty()
     stdin_tty = sys.stdin.isatty()
@@ -142,7 +145,15 @@ def chat_loop(
         print(msg)
 
     if initial_query:
-        print_assistant_reply(client, history, model, stream, initial_query)
+        print_assistant_reply(
+            client,
+            history,
+            model,
+            stream,
+            initial_query,
+            think=think,
+            show_thinking=show_thinking,
+        )
 
     while True:
         try:
@@ -158,4 +169,12 @@ def chat_loop(
             console.print("Goodbye!", style="grey50")
             break
 
-        print_assistant_reply(client, history, model, stream, user_input)
+        print_assistant_reply(
+            client,
+            history,
+            model,
+            stream,
+            user_input,
+            think=think,
+            show_thinking=show_thinking,
+        )

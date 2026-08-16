@@ -32,7 +32,13 @@ import os
 import sys
 
 from asksh import __version__
-from asksh.client import DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL, OllamaChatClient
+from asksh.client import (
+    DEFAULT_OLLAMA_BASE_URL,
+    DEFAULT_OLLAMA_MODEL,
+    OllamaChatClient,
+    parse_think_option,
+    resolve_think_option,
+)
 from asksh.config import default_config_path, load_user_config
 from asksh.history import ConversationHistory
 from asksh.ollama import verify_ollama_status
@@ -88,6 +94,22 @@ def parse_args() -> argparse.Namespace:
         help=f"Ollama server base URL (default: {DEFAULT_OLLAMA_BASE_URL}; config file may override).",
     )
     parser.add_argument(
+        "--think",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="LEVEL",
+        help=(
+            "Enable model reasoning for thinking models: true, false, "
+            "low, medium, high, or max (default: enabled when supported)."
+        ),
+    )
+    parser.add_argument(
+        "--show-thinking",
+        action="store_true",
+        help="Show the model reasoning trace (on by default when --think is enabled).",
+    )
+    parser.add_argument(
         "query",
         nargs="*",
         metavar="QUERY",
@@ -105,11 +127,27 @@ def parse_args() -> argparse.Namespace:
         if not os.path.isfile(args.context):
             parser.error(f"Context file {args.context} does not exist")
 
+    if args.think is not None:
+        try:
+            args.think = parse_think_option(args.think)
+        except ValueError as exc:
+            parser.error(str(exc))
+
     return args
 
 
 def run(args: argparse.Namespace) -> None:
     verify_ollama_status(required_model=args.model, base_url=args.base_url)
+
+    try:
+        args.think = resolve_think_option(
+            args.think,
+            model=args.model,
+            base_url=args.base_url,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     piped = read_piped_stdin()
 
@@ -141,12 +179,22 @@ def run(args: argparse.Namespace) -> None:
             model=args.model,
             stream=stream,
             initial_query=query if query else None,
+            think=args.think,
+            show_thinking=args.show_thinking,
         )
     else:
         if not query:
             print("Error: provide a query or pipe input.", file=sys.stderr)
             sys.exit(1)
-        print_assistant_reply(client, history, args.model, stream, query)
+        print_assistant_reply(
+            client,
+            history,
+            args.model,
+            stream,
+            query,
+            think=args.think,
+            show_thinking=args.show_thinking,
+        )
 
 
 def main() -> None:

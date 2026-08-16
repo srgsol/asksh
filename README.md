@@ -30,6 +30,7 @@ tar -czf archive.tar.gz --exclude=.cache my_directory
 - **Stdin support**: pipe anything in (`cat error.log | asksh ...`), works in chat mode too.
 - **Local & private**: runs against your own [Ollama](https://ollama.com/) server; no data leaves your machine.
 - **Custom model / server**: override defaults per call (`--model`, `--base-url`) or via a TOML config.
+- **Thinking models**: reasoning is enabled automatically for supported models; pass `--think false` to disable (see below).
 
 ## Quick Start
 
@@ -97,6 +98,8 @@ Only `model` and `base_url` are read from the config file. See [`config.example.
 | `-f, --context PATH`  | Use a file as additional context.                            |
 | `--model NAME`        | Ollama model (default `qwen2.5-coder`).                      |
 | `--base-url URL`      | Ollama server (default `http://localhost:11434`).            |
+| `--think LEVEL`       | Control reasoning for thinking models (`true`, `false`, `low`, `medium`, `high`, `max`; enabled when supported if omitted). |
+| `--show-thinking`     | Show the model reasoning trace (requires `--think` other than `false`). |
 | `-V, --version`       | Print version and exit.                                      |
 
 Run `asksh --help` to see the full list.
@@ -124,6 +127,16 @@ Return a command with a short explanation:
 ```bash
 asksh -e "show open tcp ports"
 ```
+
+### Thinking models
+
+Models such as DeepSeek R1 or Qwen 3 can emit a separate reasoning trace. When `--think` is omitted, `asksh` enables reasoning only for models that support it. To disable reasoning:
+
+```bash
+asksh --think false "compress this folder as tar.gz"
+```
+
+Passing `--think true` (or a level such as `medium` or `high`) on a model that does not support thinking exits with an error. The reasoning trace is shown automatically when thinking is enabled; use `--show-thinking` to force it on.
 
 ### Context file
 

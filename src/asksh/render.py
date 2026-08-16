@@ -5,27 +5,117 @@ from __future__ import annotations
 import sys
 from collections.abc import Generator
 
-from rich.console import Console
+from rich._loop import loop_last
+from rich.console import Console, Group
 from rich.live import Live
+from rich.live_render import LiveRender
 from rich.markdown import Markdown
+from rich.segment import Segment
+from rich.text import Text
 
-from asksh.client import OllamaChatClient
+from asksh.client import (
+    ChatStreamChunk,
+    OllamaChatClient,
+    ThinkOption,
+    split_embedded_thinking,
+)
 from asksh.history import ConversationHistory
 
 console = Console(highlight=False)
 _SPINNER_STYLE = "bright_cyan"
+_LIVE_VERTICAL_OVERFLOW = "crop_above"
 
 
-def _drain(gen: Generator[str, None, object], file: object = None) -> None:
-    """Write all remaining chunks from a streaming generator to *file* (default stdout)."""
+def _patch_live_render_crop_above() -> None:
+    """Keep newest streamed lines visible when content exceeds terminal height."""
+    if getattr(LiveRender, "_asksh_crop_above_patched", False):
+        return
+
+    original_rich_console = LiveRender.__rich_console__
+
+    def __rich_console__(self, console, options):
+        if self.vertical_overflow != _LIVE_VERTICAL_OVERFLOW:
+            yield from original_rich_console(self, console, options)
+            return
+
+        renderable = self.renderable
+        style = console.get_style(self.style)
+        lines = console.render_lines(renderable, options, style=style, pad=False)
+        shape = Segment.get_shape(lines)
+
+        _, height = shape
+        if height > options.size.height:
+            lines = lines[-options.size.height :]
+            shape = Segment.get_shape(lines)
+        self._shape = shape
+
+        new_line = Segment.line()
+        for last, line in loop_last(lines):
+            yield from line
+            if not last:
+                yield new_line
+
+    LiveRender.__rich_console__ = __rich_console__
+    LiveRender._asksh_crop_above_patched = True
+
+
+_patch_live_render_crop_above()
+
+
+def _drain(gen: Generator[ChatStreamChunk, None, object], file: object = None) -> None:
+    """Write content chunks from a streaming generator to *file* (default stdout)."""
     out = file or sys.stdout
     try:
         while True:
             chunk = next(gen)
-            out.write(chunk)
-            out.flush()
+            if not chunk.is_thinking:
+                out.write(chunk.text)
+                out.flush()
     except StopIteration:
         pass
+
+
+_THINKING_PREFIX = "Thinking...\n"
+
+
+def _format_thinking(thinking: str) -> Text:
+    return Text(f"{_THINKING_PREFIX}{thinking}", style="grey50 italic")
+
+
+def _should_show_thinking(*, think: ThinkOption, show_thinking: bool) -> bool:
+    return show_thinking or think is not False
+
+
+def _stream_display(
+    thinking: str,
+    content: str,
+    *,
+    think: ThinkOption,
+    show_thinking: bool,
+) -> Text | Markdown | Group:
+    display_thinking = _should_show_thinking(think=think, show_thinking=show_thinking)
+    display_content, embedded = split_embedded_thinking(content)
+    if embedded and not thinking:
+        thinking = embedded
+
+    parts: list[Text | Markdown] = []
+    if display_thinking and thinking:
+        parts.append(_format_thinking(thinking))
+    if display_content:
+        if parts:
+            parts.append(Text(""))
+        parts.append(Markdown(display_content))
+    if not parts:
+        return Text("")
+    if len(parts) == 1:
+        return parts[0]
+    return Group(*parts)
+
+
+def _print_thinking(thinking: str) -> None:
+    if not thinking:
+        return
+    console.print(_format_thinking(thinking))
 
 
 def print_assistant_reply(
@@ -34,48 +124,79 @@ def print_assistant_reply(
     model: str,
     stream: bool,
     user_input: str,
+    *,
+    think: ThinkOption = False,
+    show_thinking: bool = False,
 ) -> None:
     is_tty = sys.stdout.isatty()
+    display_thinking = _should_show_thinking(think=think, show_thinking=show_thinking)
 
     if stream:
         gen = client.stream_message(
             user_input,
             model=model,
             history=history,
+            think=think,
         )
         if is_tty:
-            text = ""
+            thinking_text = ""
+            content_text = ""
             with Live(
-                Markdown(""),
+                _stream_display("", "", think=think, show_thinking=show_thinking),
                 console=console,
                 refresh_per_second=12,
                 transient=True,
+                vertical_overflow=_LIVE_VERTICAL_OVERFLOW,
             ) as live:
                 try:
                     while True:
                         chunk = next(gen)
-                        text += chunk
-                        live.update(Markdown(text))
+                        if chunk.is_thinking:
+                            thinking_text += chunk.text
+                        else:
+                            content_text += chunk.text
+                        live.update(
+                            _stream_display(
+                                thinking_text,
+                                content_text,
+                                think=think,
+                                show_thinking=show_thinking,
+                            )
+                        )
                 except StopIteration:
                     pass
-            if text:
-                console.print(Markdown(text))
+            content_text, embedded_thinking = split_embedded_thinking(content_text)
+            if embedded_thinking and not thinking_text:
+                thinking_text = embedded_thinking
+            if display_thinking and thinking_text:
+                _print_thinking(thinking_text)
+            if content_text:
+                if display_thinking and thinking_text:
+                    console.print()
+                console.print(Markdown(content_text))
         else:
             _drain(gen)
             print()
     else:
         if is_tty:
             with console.status("", spinner="dots", spinner_style=_SPINNER_STYLE):
-                reply, _ = client.send_message(
+                reply, thinking = client.send_message(
                     user_input,
                     model=model,
                     history=history,
+                    think=think,
                 )
-            console.print(Markdown(reply))
+            if display_thinking and thinking:
+                _print_thinking(thinking)
+            if reply:
+                if display_thinking and thinking:
+                    console.print()
+                console.print(Markdown(reply))
         else:
             reply, _ = client.send_message(
                 user_input,
                 model=model,
                 history=history,
+                think=think,
             )
             print(reply)
