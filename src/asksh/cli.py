@@ -39,9 +39,7 @@ from asksh.ollama import verify_ollama_status
 from asksh.query import build_query, read_piped_stdin
 from asksh.render import print_assistant_reply
 from asksh.sysprompt import (
-    LINUX_ASSISTANT_SYSTEM_PROMPT,
-    LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT,
-    LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN,
+    build_system_prompt,
 )
 
 
@@ -115,16 +113,16 @@ def run(args: argparse.Namespace) -> None:
 
     piped = read_piped_stdin()
 
+    mode = None
     if args.chat:
-        system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT_CHAT
-        stream = True
+        mode = "chat"
     elif args.explain:
-        system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT_EXPLAIN
-        stream = True
+        mode = "explain"
     else:
-        system_prompt = LINUX_ASSISTANT_SYSTEM_PROMPT
-        stream = False
+        mode = "oneshot"
+    system_prompt = build_system_prompt(mode)
 
+    stream = True
     history = ConversationHistory(system_prompt=system_prompt)
     client = OllamaChatClient(base_url=args.base_url)
     query = build_query(args.query_text, piped, args.context)
