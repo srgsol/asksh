@@ -124,7 +124,7 @@ asksh
 asksh -c
 ```
 
-While a reply is streaming, the newest lines stay visible (tail-follow). Scroll up (mouse wheel, PgUp/PgDn, or arrow keys) to read earlier lines of the reply — the view stays where you scrolled and resumes following when you scroll back down. Press `Ctrl-C` to abort the stream and return to the prompt; the full reply is printed once after completion.
+While a reply is streaming, the newest lines stay visible (tail-follow). Scroll up (mouse wheel, PgUp/PgDn, or arrow keys) to read earlier output in the terminal's native scrollback. Press `Ctrl-C` to abort the stream; the full reply is printed once into the scrollback after completion.
 
 ### Explain mode
 
