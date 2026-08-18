@@ -5,12 +5,15 @@ from __future__ import annotations
 import sys
 from collections.abc import Generator
 
+from typing import cast, TextIO
+
 from rich._loop import loop_last
 from rich.console import Console, Group
 from rich.live import Live
-from rich.live_render import LiveRender
+from rich.live_render import LiveRender, VerticalOverflowMethod
 from rich.markdown import Markdown
 from rich.segment import Segment
+from rich.spinner import Spinner
 from rich.text import Text
 
 from asksh.client import (
@@ -24,11 +27,13 @@ from asksh.history import ConversationHistory
 console = Console(highlight=False)
 _SPINNER_STYLE = "bright_cyan"
 _LIVE_VERTICAL_OVERFLOW = "crop_above"
+_crop_above_patched = False
 
 
 def _patch_live_render_crop_above() -> None:
     """Keep newest streamed lines visible when content exceeds terminal height."""
-    if getattr(LiveRender, "_asksh_crop_above_patched", False):
+    global _crop_above_patched
+    if _crop_above_patched:
         return
 
     original_rich_console = LiveRender.__rich_console__
@@ -56,13 +61,15 @@ def _patch_live_render_crop_above() -> None:
                 yield new_line
 
     LiveRender.__rich_console__ = __rich_console__
-    LiveRender._asksh_crop_above_patched = True
+    _crop_above_patched = True
 
 
 _patch_live_render_crop_above()
 
 
-def _drain(gen: Generator[ChatStreamChunk, None, object], file: object = None) -> None:
+def _drain(
+    gen: Generator[ChatStreamChunk, None, object], file: TextIO | None = None
+) -> None:
     """Write content chunks from a streaming generator to *file* (default stdout)."""
     out = file or sys.stdout
     try:
@@ -92,7 +99,7 @@ def _stream_display(
     *,
     think: ThinkOption,
     show_thinking: bool,
-) -> Text | Markdown | Group:
+) -> Text | Markdown | Group | Spinner:
     display_thinking = _should_show_thinking(think=think, show_thinking=show_thinking)
     display_content, embedded = split_embedded_thinking(content)
     if embedded and not thinking:
@@ -106,7 +113,7 @@ def _stream_display(
             parts.append(Text(""))
         parts.append(Markdown(display_content))
     if not parts:
-        return Text("")
+        return Spinner("dots", style=_SPINNER_STYLE)
     if len(parts) == 1:
         return parts[0]
     return Group(*parts)
@@ -146,7 +153,7 @@ def print_assistant_reply(
                 console=console,
                 refresh_per_second=12,
                 transient=True,
-                vertical_overflow=_LIVE_VERTICAL_OVERFLOW,
+                vertical_overflow=cast(VerticalOverflowMethod, _LIVE_VERTICAL_OVERFLOW),
             ) as live:
                 try:
                     while True:
