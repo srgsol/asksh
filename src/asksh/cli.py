@@ -47,6 +47,7 @@ from asksh.render import print_assistant_reply
 from asksh.sysprompt import (
     build_system_prompt,
 )
+from asksh.update import check_for_update
 
 
 def parse_args() -> argparse.Namespace:
@@ -110,6 +111,13 @@ def parse_args() -> argparse.Namespace:
         help="Show the model reasoning trace (on by default when --think is enabled).",
     )
     parser.add_argument(
+        "--no-update-check",
+        action="store_false",
+        dest="update_check",
+        default=True,
+        help="Disable the startup check for new asksh versions on PyPI (default: enabled).",
+    )
+    parser.add_argument(
         "query",
         nargs="*",
         metavar="QUERY",
@@ -136,7 +144,21 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def warn_if_update_available(args: argparse.Namespace) -> None:
+    """Print a one-line stderr notice when a newer asksh release exists."""
+    if not args.update_check:
+        return
+    latest = check_for_update(__version__)
+    if latest:
+        print(
+            f"Info: new asksh version available: {latest} (installed: {__version__}). "
+            "Upgrade with: 'pipx upgrade asksh' or 'uv tool upgrade asksh'",
+            file=sys.stderr,
+        )
+
+
 def run(args: argparse.Namespace) -> None:
+    warn_if_update_available(args)
     verify_ollama_status(required_model=args.model, base_url=args.base_url)
 
     try:

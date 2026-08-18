@@ -7,3 +7,7 @@ MODEL = "qwen2.5-coder"
 
 # The base URL of the Ollama server.
 BASE_URL = "http://localhost:11434"
+
+# Check for a new asksh release on PyPI at startup (once per 24h; best-effort).
+# Set to false to disable the check entirely.
+UPDATE_CHECK = true

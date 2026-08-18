@@ -80,12 +80,15 @@ CLI flags always win. To avoid retyping `--model`/`--base-url` on every run, dro
 
 - `$XDG_CONFIG_HOME/asksh/config.toml` (or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset).
 
-Only `model` and `base_url` are read from the config file. See [`config.example.toml`](config.example.toml).
+Only `model`, `base_url` and `update_check` are read from the config file. See [`config.example.toml`](config.example.toml).
 
-| Setting    | Default                  |
-| ---------- | ------------------------ |
-| `model`    | `qwen2.5-coder`          |
-| `base_url` | `http://localhost:11434` |
+| Setting        | Default                  |
+| -------------- | ------------------------ |
+| `model`        | `qwen2.5-coder`          |
+| `base_url`     | `http://localhost:11434` |
+| `update_check` | `true`                   |
+
+At startup, asksh checks PyPI for a new release (at most once per 24h, cached in `$XDG_CACHE_HOME/asksh/update_check`). If one exists it prints a one-line notice with the upgrade command; the check never fails startup and is skipped entirely when offline. Disable it with `UPDATE_CHECK = false` in the config or the `--no-update-check` flag.
 
 ## Usage
 
@@ -100,6 +103,7 @@ Only `model` and `base_url` are read from the config file. See [`config.example.
 | `--base-url URL`      | Ollama server (default `http://localhost:11434`).            |
 | `--think LEVEL`       | Control reasoning for thinking models (`true`, `false`, `low`, `medium`, `high`, `max`; enabled when supported if omitted). |
 | `--show-thinking`     | Show the model reasoning trace (requires `--think` other than `false`). |
+| `--no-update-check`   | Skip the startup PyPI update check.                              |
 | `-V, --version`       | Print version and exit.                                      |
 
 Run `asksh --help` to see the full list.

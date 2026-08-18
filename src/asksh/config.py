@@ -13,12 +13,19 @@ else:
     import tomli as tomllib
 
 
-_VALID_CONFIG_KEYS = frozenset({"MODEL", "BASE_URL"})
+_VALID_CONFIG_KEYS = frozenset({"MODEL", "BASE_URL", "UPDATE_CHECK"})
 
 # TOML keys -> argparse ``Namespace`` attribute names (``--model``, ``--base-url``).
 _CONFIG_TO_ARG_DEST: dict[str, str] = {
     "MODEL": "model",
     "BASE_URL": "base_url",
+    "UPDATE_CHECK": "update_check",
+}
+
+_CONFIG_KEY_TYPES: dict[str, type] = {
+    "MODEL": str,
+    "BASE_URL": str,
+    "UPDATE_CHECK": bool,
 }
 
 
@@ -54,9 +61,11 @@ def load_user_config() -> dict[str, Any]:
         if key not in raw or raw[key] is None:
             continue
         val = raw[key]
-        if not isinstance(val, str):
+        expected = _CONFIG_KEY_TYPES[key]
+        if not isinstance(val, expected):
             print(
-                f"Warning: config key {key!r} must be a string, got {type(val).__name__}; ignoring.",
+                f"Warning: config key {key!r} must be {expected.__name__}, "
+                f"got {type(val).__name__}; ignoring.",
                 file=sys.stderr,
             )
             continue
