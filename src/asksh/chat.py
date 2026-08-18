@@ -11,7 +11,7 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
-from rich.markdown import Markdown
+from rich.markup import escape
 from rich.panel import Panel
 from rich.text import Text
 
@@ -105,6 +105,21 @@ def _read_chat_user_input(stdin_is_tty: bool) -> str:
     return _read_chat_user_input_line_based()
 
 
+def _intro_markup(model: str, stdin_is_tty: bool) -> str:
+    """Intro panel body as Textual markup (the stream overlay re-prints it)."""
+    lines = [
+        f"Chatting with model [bright_cyan]{escape(model)}[/bright_cyan]",
+        "- Multiline input: Alt+Enter.",
+        "- Type 'exit' or Ctrl-C to quit.",
+    ]
+    if not stdin_is_tty:
+        lines.append(
+            "Without a TTY, use \\ at the end of a line, then Enter, "
+            "to continue on the next line."
+        )
+    return "\n".join(lines)
+
+
 def chat_loop(
     client: OllamaChatClient,
     history: ConversationHistory,
@@ -136,6 +151,7 @@ def chat_loop(
             expand=True,
         )
         console.print(intro_panel)
+        intro_markup = _intro_markup(model, stdin_tty)
     else:
         msg = (
             f"Chatting with model '{model}'. "
@@ -143,29 +159,7 @@ def chat_loop(
             "End a line with \\ then Enter to add more lines.\n"
         )
         print(msg)
-
-    if stdout_tty:
-
-        def repaint_prefix() -> None:
-            """Re-print everything that sits above the streaming region.
-
-            Called by the resize repair (see ``_ResizeSafeLive``). History is
-            read at repair time because the current user message is only
-            added once streaming starts. Prior thinking blocks are not
-            re-printed (history stores the thinking-stripped content); the
-            originals survive in scrollback.
-            """
-            console.print(intro_panel)
-            for msg in history.get_messages():
-                if msg.role == "system":
-                    continue
-                if msg.role == "user":
-                    console.print(Text(">>> ", style="cyan") + Text(msg.content))
-                else:
-                    console.print(Markdown(msg.content))
-
-    else:
-        repaint_prefix = None
+        intro_markup = None
 
     if initial_query:
         print_assistant_reply(
@@ -176,7 +170,7 @@ def chat_loop(
             initial_query,
             think=think,
             show_thinking=show_thinking,
-            repaint_prefix=repaint_prefix,
+            intro_markup=intro_markup,
         )
 
     while True:
@@ -201,5 +195,5 @@ def chat_loop(
             user_input,
             think=think,
             show_thinking=show_thinking,
-            repaint_prefix=repaint_prefix,
+            intro_markup=intro_markup,
         )

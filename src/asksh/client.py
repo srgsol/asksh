@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import sys
+import threading
 from collections.abc import Generator
 from typing import Literal, NamedTuple
 
@@ -103,6 +104,17 @@ class OllamaChatClient:
     def __init__(self, base_url: str = DEFAULT_OLLAMA_BASE_URL) -> None:
         self._base_url = base_url.rstrip("/")
         self._thinking_support: dict[str, bool] = {}
+        self._current_response: requests.Response | None = None
+
+    def abort_active_stream(self) -> None:
+        """Force-close the HTTP response of an in-flight stream.
+
+        Closing the connection from the UI thread unblocks the worker
+        thread's blocked socket read so the stream can abort promptly.
+        """
+        response = self._current_response
+        if response is not None:
+            response.close()
 
     def _model_supports_thinking(self, model: str) -> bool:
         if model not in self._thinking_support:
@@ -176,8 +188,14 @@ class OllamaChatClient:
         instructions: str | None = None,
         history: ConversationHistory | None = None,
         think: ThinkOption = False,
+        abort: threading.Event | None = None,
     ) -> Generator[ChatStreamChunk, None, tuple[str, str]]:
-        """Stream a response (NDJSON), yielding text deltas as they arrive."""
+        """Stream a response (NDJSON), yielding text deltas as they arrive.
+
+        When *abort* is set (checked between lines, and combined with
+        ``abort_active_stream`` to unblock a stalled read), the stream stops
+        and the partial assistant reply is not added to history.
+        """
         messages = self._build_messages(user_input, instructions, history)
 
         thinking_text = ""
@@ -195,29 +213,35 @@ class OllamaChatClient:
             stream=True,
             timeout=120,
         ) as resp:
-            resp.raise_for_status()
-            for raw_line in resp.iter_lines():
-                if not raw_line:
-                    continue
-                try:
-                    chunk = json.loads(raw_line)
-                except json.JSONDecodeError:
-                    continue
+            self._current_response = resp
+            try:
+                resp.raise_for_status()
+                for raw_line in resp.iter_lines():
+                    if abort is not None and abort.is_set():
+                        break
+                    if not raw_line:
+                        continue
+                    try:
+                        chunk = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        continue
 
-                msg = chunk.get("message", {})
-                thinking_delta = msg.get("thinking") or ""
-                content_delta = msg.get("content") or ""
+                    msg = chunk.get("message", {})
+                    thinking_delta = msg.get("thinking") or ""
+                    content_delta = msg.get("content") or ""
 
-                if thinking_delta:
-                    thinking_text += thinking_delta
-                    yield ChatStreamChunk(thinking_delta, is_thinking=True)
-                if content_delta:
-                    content_text += content_delta
-                    yield ChatStreamChunk(content_delta, is_thinking=False)
+                    if thinking_delta:
+                        thinking_text += thinking_delta
+                        yield ChatStreamChunk(thinking_delta, is_thinking=True)
+                    if content_delta:
+                        content_text += content_delta
+                        yield ChatStreamChunk(content_delta, is_thinking=False)
+            finally:
+                self._current_response = None
 
         content, embedded = split_embedded_thinking(content_text)
         if embedded and not thinking_text:
             thinking_text = embedded
-        if history is not None:
+        if history is not None and not (abort is not None and abort.is_set()):
             history.add_message("assistant", content)
         return content, thinking_text
