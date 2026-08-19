@@ -93,6 +93,36 @@ def strip_embedded_thinking(text: str) -> str:
     return split_embedded_thinking(text)[0]
 
 
+_THINK_OPEN = f"<{_THINK_TAG}>"
+_THINK_OPEN_RE = re.compile(rf"<{_THINK_TAG}>", re.IGNORECASE)
+_THINK_CLOSE_RE = re.compile(rf"</{_THINK_TAG}>", re.IGNORECASE)
+
+
+def split_streaming_embedded_thinking(text: str) -> tuple[str, str, str]:
+    """Split partial, still-streaming *text* around embedded `` blocks.
+
+    Returns ``(visible_content, completed_thinking, pending_thinking)``:
+    ``completed_thinking`` covers every fully closed ``<think>...</think>``
+    pair seen so far (via :func:`split_embedded_thinking`); ``pending_thinking``
+    is text after a trailing, still-open ``<think>`` tag. Both the pending
+    tag's contents and a partial prefix of the opening tag itself (e.g. a
+    chunk boundary that lands on ``...<thi``) are held out of
+    ``visible_content`` so they never flash on screen before resolving.
+    """
+    opens = list(_THINK_OPEN_RE.finditer(text))
+    closes = list(_THINK_CLOSE_RE.finditer(text))
+    if len(opens) > len(closes):
+        last_open = opens[-1]
+        visible, completed = split_embedded_thinking(text[: last_open.start()])
+        return visible, completed, text[last_open.end() :]
+
+    visible, completed = split_embedded_thinking(text)
+    for prefix_len in range(min(len(_THINK_OPEN) - 1, len(visible)), 0, -1):
+        if visible.endswith(_THINK_OPEN[:prefix_len]):
+            return visible[:-prefix_len], completed, ""
+    return visible, completed, ""
+
+
 def _history_to_ollama_messages(history: ConversationHistory) -> list[dict]:
     """Convert conversation history to the messages list Ollama /api/chat expects."""
     return [{"role": m.role, "content": m.content} for m in history.get_items()]

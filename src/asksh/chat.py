@@ -11,13 +11,12 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
-from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 
 from asksh.client import OllamaChatClient, ThinkOption
 from asksh.history import ConversationHistory
-from asksh.render import console, plain_code_theme, print_assistant_reply
+from asksh.render import console, print_assistant_reply
 
 _chat_prompt_session: PromptSession | None = None
 
@@ -144,29 +143,6 @@ def chat_loop(
         )
         print(msg)
 
-    if stdout_tty:
-
-        def repaint_prefix() -> None:
-            """Re-print everything that sits above the streaming region.
-
-            Called by the resize repair (see ``_ResizeSafeLive``). History is
-            read at repair time because the current user message is only
-            added once streaming starts. Prior thinking blocks are not
-            re-printed (history stores the thinking-stripped content); the
-            originals survive in scrollback.
-            """
-            console.print(intro_panel)
-            for msg in history.get_messages():
-                if msg.role == "system":
-                    continue
-                if msg.role == "user":
-                    console.print(Text(">>> ", style="cyan") + Text(msg.content))
-                else:
-                    console.print(Markdown(msg.content, code_theme=plain_code_theme))
-
-    else:
-        repaint_prefix = None
-
     if initial_query:
         print_assistant_reply(
             client,
@@ -176,7 +152,6 @@ def chat_loop(
             initial_query,
             think=think,
             show_thinking=show_thinking,
-            repaint_prefix=repaint_prefix,
         )
 
     while True:
@@ -201,5 +176,4 @@ def chat_loop(
             user_input,
             think=think,
             show_thinking=show_thinking,
-            repaint_prefix=repaint_prefix,
         )

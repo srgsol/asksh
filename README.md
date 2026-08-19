@@ -124,7 +124,7 @@ asksh
 asksh -c
 ```
 
-While a reply is streaming, the newest lines stay visible (tail-follow). Scroll up (mouse wheel, PgUp/PgDn, or arrow keys) to read earlier output in the terminal's native scrollback. Press `Ctrl-C` to abort the stream; the full reply is printed once into the scrollback after completion.
+Replies stream in append-only: finished lines are printed once and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output. Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
 
 ### Explain mode
 
