@@ -16,3 +16,8 @@ docs/
 
 # Environment variables
 .env
+
+# Test
+test/test_llmqa/
+test/xxx_test_queries.py
+test/queries.jsonl
