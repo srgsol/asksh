@@ -30,7 +30,11 @@ def model_supports_thinking(
     base_url: str = "http://localhost:11434",
 ) -> bool:
     """Return whether ``model`` accepts the top-level ``think`` chat parameter."""
-    return _THINKING_CAPABILITY in fetch_model_capabilities(model, base_url)
+    try:
+        capabilities = fetch_model_capabilities(model, base_url)
+    except requests.exceptions.RequestException:
+        return False
+    return _THINKING_CAPABILITY in capabilities
 
 
 def verify_ollama_status(

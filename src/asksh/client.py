@@ -68,7 +68,12 @@ def resolve_think_option(
     """Resolve an optional ``--think`` value against model capabilities."""
     if think is False:
         return False
-    supported = model_supports_thinking(model, base_url)
+    try:
+        supported = model_supports_thinking(model, base_url)
+    except requests.exceptions.RequestException:
+        if think is None:
+            return False
+        return think
     if think is None:
         return True if supported else False
     if not supported:
