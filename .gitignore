@@ -12,6 +12,7 @@ wheels/
 
 # Temporary files
 tmp/
+docs/
 
 # Environment variables
 .env

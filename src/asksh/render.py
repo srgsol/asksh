@@ -27,6 +27,7 @@ from asksh.client import (
 )
 from asksh.config import RenderStyle
 from asksh.history import ConversationHistory
+from asksh.last_message import save_last_message
 from asksh.stream_render import AppendOnlyWriter, LiveRow, PreviewWriter, StreamAnimator
 
 console = Console(highlight=False)
@@ -402,6 +403,25 @@ def _stream_reply_tty(
         console.print(Markdown(visible_content, code_theme=plain_code_theme))
 
 
+def _save_last_assistant_reply(history: ConversationHistory) -> None:
+    """Persist the most recent assistant turn so ``asksh -m`` can re-render it.
+
+    A no-op when the last chat message isn't from the assistant (e.g. the
+    reply was aborted, so no assistant turn was added to *history*).
+    """
+    chat_messages = history.get_chat_messages()
+    if chat_messages and chat_messages[-1].role == "assistant":
+        save_last_message(chat_messages[-1].content)
+
+
+def print_saved_markdown(content: str) -> None:
+    """Render a previously saved assistant reply (``asksh -m``) as Markdown."""
+    if sys.stdout.isatty():
+        console.print(Markdown(content, code_theme=plain_code_theme))
+    else:
+        print(content)
+
+
 def print_assistant_reply(
     client: OllamaChatClient,
     history: ConversationHistory,
@@ -462,3 +482,5 @@ def print_assistant_reply(
                 think=think,
             )
             print(reply)
+
+    _save_last_assistant_reply(history)

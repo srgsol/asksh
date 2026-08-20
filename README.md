@@ -26,6 +26,7 @@ tar -czf archive.tar.gz --exclude=.cache my_directory
 - **One-shot command** (default): returns just the shell command, no commentary.
 - **Explain mode** (`-e/--explain`): returns a command with a short explanation.
 - **Interactive chat** (`-c/--chat`, or run with no query): streamed multi-turn chat for broader help.
+- **Re-render last reply** (`-m/--markdown`): reprint the previous assistant reply as Markdown, offline (no Ollama call).
 - **File context** (`-f/--context PATH`): attach a file (logs, configs, code) as context.
 - **Stdin support**: pipe anything in (`cat error.log | asksh ...`), works in chat mode too.
 - **Local & private**: runs against your own [Ollama](https://ollama.com/) server; no data leaves your machine.
@@ -112,6 +113,7 @@ At startup, asksh checks PyPI for a new release (at most once per 24h, cached in
 | --------------------- | ------------------------------------------------------------ |
 | `-c, --chat`          | Start interactive chat (also the default when no query).     |
 | `-e, --explain`       | Return a command with a short explanation.                   |
+| `-m, --markdown`      | Re-render the last assistant reply as Markdown (no Ollama call). |
 | `-f, --context PATH`  | Use a file as additional context.                            |
 | `--model NAME`        | Ollama model (default `qwen2.5-coder`).                      |
 | `--base-url URL`      | Ollama server (default `http://localhost:11434`).            |
@@ -147,6 +149,16 @@ Return a command with a short explanation:
 ```bash
 asksh -e "show open tcp ports"
 ```
+
+### Re-render the last reply as Markdown
+
+`asksh` saves the most recent assistant reply (from one-shot, explain, or chat mode) to `$XDG_STATE_HOME/asksh/last_reply` (fallback `~/.local/state/asksh/last_reply`). Reprint it as formatted Markdown, offline, with no query and no Ollama call:
+
+```bash
+asksh -m
+```
+
+`-m/--markdown` cannot be combined with `-c/--chat`, `-e/--explain`, or a query.
 
 ### Thinking models
 

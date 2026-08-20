@@ -41,9 +41,10 @@ from asksh.client import (
 )
 from asksh.config import default_config_path, load_user_config
 from asksh.history import ConversationHistory
+from asksh.last_message import default_state_dir, load_last_message
 from asksh.ollama import verify_ollama_status
 from asksh.query import build_query, read_piped_stdin
-from asksh.render import print_assistant_reply
+from asksh.render import print_assistant_reply, print_saved_markdown
 from asksh.sysprompt import (
     build_system_prompt,
 )
@@ -55,8 +56,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="asksh",
         description=(
-            "Chat with an Ollama model. Optional defaults are read from "
-            f"{default_config_path()}."
+            "Chat with an Ollama model.\nConfig path: "
+            f"'{default_config_path()}'.\nState files path: "
+            f"'{default_state_dir()}'."
         ),
     )
     parser.add_argument(
@@ -77,6 +79,15 @@ def parse_args() -> argparse.Namespace:
         "--explain",
         action="store_true",
         help="Explain the answer (one-shot; cannot be combined with -c/--chat).",
+    )
+    mode.add_argument(
+        "-m",
+        "--markdown",
+        action="store_true",
+        help=(
+            "Re-render the last assistant reply as Markdown, without querying "
+            "Ollama (cannot be combined with -c/--chat or -e/--explain or a QUERY)."
+        ),
     )
     parser.add_argument(
         "-f",
@@ -135,7 +146,9 @@ def parse_args() -> argparse.Namespace:
 
     query_text = " ".join(args.query).strip()
     args.query_text = query_text
-    if not query_text and not args.explain:
+    if args.markdown and query_text:
+        parser.error("argument -m/--markdown: not allowed with a QUERY")
+    if not query_text and not args.explain and not args.markdown:
         args.chat = True
 
     if args.context:
@@ -165,6 +178,14 @@ def warn_if_update_available(args: argparse.Namespace) -> None:
 
 
 def run(args: argparse.Namespace) -> None:
+    if args.markdown:
+        text = load_last_message()
+        if not text:
+            print("Error: no previous assistant message to render.", file=sys.stderr)
+            sys.exit(1)
+        print_saved_markdown(text)
+        return
+
     warn_if_update_available(args)
     verify_ollama_status(required_model=args.model, base_url=args.base_url)
 
