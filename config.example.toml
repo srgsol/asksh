@@ -26,6 +26,6 @@ UPDATE_CHECK = true
 #                    final print is always clean); accept that trade-off
 #                    only if you want live-formatted Markdown while it
 #                    streams.
-ONESHOT_RENDER = "markdown"
+ONESHOT_RENDER = "text"
 EXPLAIN_RENDER = "text"
 CHAT_RENDER = "text"

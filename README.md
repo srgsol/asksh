@@ -88,7 +88,7 @@ Only `model`, `base_url`, `update_check`, and the per-mode render style are read
 | `model`          | `qwen2.5-coder`          |
 | `base_url`       | `http://localhost:11434` |
 | `update_check`   | `true`                   |
-| `oneshot_render` | `text`               |
+| `oneshot_render` | `text`                   |
 | `explain_render` | `text`                   |
 | `chat_render`    | `text`                   |
 
