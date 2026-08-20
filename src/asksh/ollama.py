@@ -1,6 +1,40 @@
+from __future__ import annotations
+
 from typing import Any
 
 import requests
+
+_THINKING_CAPABILITY = "thinking"
+
+
+def fetch_model_capabilities(
+    model: str,
+    base_url: str = "http://localhost:11434",
+) -> list[str]:
+    """Return capability strings reported by Ollama ``/api/show``."""
+    base_url = base_url.rstrip("/")
+    response = requests.post(
+        f"{base_url}/api/show",
+        json={"model": model},
+        timeout=4.0,
+    )
+    response.raise_for_status()
+    capabilities = response.json().get("capabilities")
+    if not isinstance(capabilities, list):
+        return []
+    return [cap for cap in capabilities if isinstance(cap, str)]
+
+
+def model_supports_thinking(
+    model: str,
+    base_url: str = "http://localhost:11434",
+) -> bool:
+    """Return whether ``model`` accepts the top-level ``think`` chat parameter."""
+    try:
+        capabilities = fetch_model_capabilities(model, base_url)
+    except requests.exceptions.RequestException:
+        return False
+    return _THINKING_CAPABILITY in capabilities
 
 
 def verify_ollama_status(

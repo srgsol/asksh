@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "asksh"
-version = "0.2.4"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "prompt-toolkit" },
@@ -24,7 +24,7 @@ dev = [
 requires-dist = [
     { name = "prompt-toolkit", specifier = ">=3.0.43,<4" },
     { name = "requests", specifier = ">=2.32.5" },
-    { name = "rich", specifier = ">=15.0.0" },
+    { name = "rich", specifier = ">=15.0.0,<16" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0.1" },
 ]
 

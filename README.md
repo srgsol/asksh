@@ -26,10 +26,12 @@ tar -czf archive.tar.gz --exclude=.cache my_directory
 - **One-shot command** (default): returns just the shell command, no commentary.
 - **Explain mode** (`-e/--explain`): returns a command with a short explanation.
 - **Interactive chat** (`-c/--chat`, or run with no query): streamed multi-turn chat for broader help.
+- **Re-render last reply** (`-m/--markdown`): reprint the previous assistant reply as Markdown, offline (no Ollama call).
 - **File context** (`-f/--context PATH`): attach a file (logs, configs, code) as context.
 - **Stdin support**: pipe anything in (`cat error.log | asksh ...`), works in chat mode too.
 - **Local & private**: runs against your own [Ollama](https://ollama.com/) server; no data leaves your machine.
 - **Custom model / server**: override defaults per call (`--model`, `--base-url`) or via a TOML config.
+- **Thinking models**: reasoning is enabled automatically for supported models; pass `--think false` to disable (see below).
 
 ## Quick Start
 
@@ -79,12 +81,29 @@ CLI flags always win. To avoid retyping `--model`/`--base-url` on every run, dro
 
 - `$XDG_CONFIG_HOME/asksh/config.toml` (or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset).
 
-Only `model` and `base_url` are read from the config file. See [`config.example.toml`](config.example.toml).
+Only `model`, `base_url`, `update_check`, and the per-mode render style are read from the config file. See [`config.example.toml`](config.example.toml).
 
-| Setting    | Default                  |
-| ---------- | ------------------------ |
-| `model`    | `qwen2.5-coder`          |
-| `base_url` | `http://localhost:11434` |
+| Setting          | Default                  |
+| ---------------- | ------------------------ |
+| `model`          | `qwen2.5-coder`          |
+| `base_url`       | `http://localhost:11434` |
+| `update_check`   | `true`                   |
+| `oneshot_render` | `text`                   |
+| `explain_render` | `text`                   |
+| `chat_render`    | `text`                   |
+
+### Render style
+
+`ONESHOT_RENDER` / `EXPLAIN_RENDER` / `CHAT_RENDER` (config-only, no CLI flag) each pick one of:
+
+- `text` — stream as plain text (the only copy).
+- `markdown` — show a spinner/preview while tokens arrive, then print the whole reply as Markdown once, when it completes.
+- `post_markdown` — stream as plain text, then print a second Markdown copy of the same reply below it.
+- `live_markdown` — live Markdown preview, redrawn as tokens arrive, then one final Markdown print. Resizing or scrolling the terminal mid-stream can garble the live preview (the final print is always clean); accept that trade-off only if you want live-formatted Markdown while it streams.
+
+An invalid value is ignored with a warning; the mode's default (above) is used instead.
+
+At startup, asksh checks PyPI for a new release (at most once per 24h, cached in `$XDG_CACHE_HOME/asksh/update_check`). If one exists it prints a one-line notice with the upgrade command; the check never fails startup and is skipped entirely when offline. Disable it with `UPDATE_CHECK = false` in the config or the `--no-update-check` flag.
 
 ## Usage
 
@@ -94,9 +113,13 @@ Only `model` and `base_url` are read from the config file. See [`config.example.
 | --------------------- | ------------------------------------------------------------ |
 | `-c, --chat`          | Start interactive chat (also the default when no query).     |
 | `-e, --explain`       | Return a command with a short explanation.                   |
+| `-m, --markdown`      | Re-render the last assistant reply as Markdown (no Ollama call). |
 | `-f, --context PATH`  | Use a file as additional context.                            |
 | `--model NAME`        | Ollama model (default `qwen2.5-coder`).                      |
 | `--base-url URL`      | Ollama server (default `http://localhost:11434`).            |
+| `--think LEVEL`       | Control reasoning for thinking models (`true`, `false`, `low`, `medium`, `high`, `max`; enabled when supported if omitted). |
+| `--show-thinking`     | Show the model reasoning trace (requires `--think` other than `false`). |
+| `--no-update-check`   | Skip the startup PyPI update check.                              |
 | `-V, --version`       | Print version and exit.                                      |
 
 Run `asksh --help` to see the full list.
@@ -117,6 +140,8 @@ asksh
 asksh -c
 ```
 
+By default (`CHAT_RENDER = "text"`), replies stream append-only: finished lines are printed once and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output — this guarantee holds for the `text`, `markdown`, and `post_markdown` render styles alike (only `live_markdown` redraws in place and can desync on resize/scroll; see [Render style](#render-style)). Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
+
 ### Explain mode
 
 Return a command with a short explanation:
@@ -124,6 +149,26 @@ Return a command with a short explanation:
 ```bash
 asksh -e "show open tcp ports"
 ```
+
+### Re-render the last reply as Markdown
+
+`asksh` saves the most recent assistant reply (from one-shot, explain, or chat mode) to `$XDG_STATE_HOME/asksh/last_reply` (fallback `~/.local/state/asksh/last_reply`). Reprint it as formatted Markdown, offline, with no query and no Ollama call:
+
+```bash
+asksh -m
+```
+
+`-m/--markdown` cannot be combined with `-c/--chat`, `-e/--explain`, or a query.
+
+### Thinking models
+
+Models such as DeepSeek R1 or Qwen 3 can emit a separate reasoning trace. When `--think` is omitted, `asksh` enables reasoning only for models that support it. To disable reasoning:
+
+```bash
+asksh --think false "compress this folder as tar.gz"
+```
+
+Passing `--think true` (or a level such as `medium` or `high`) on a model that does not support thinking exits with an error. The reasoning trace is shown automatically when thinking is enabled; use `--show-thinking` to force it on.
 
 ### Context file
 

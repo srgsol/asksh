@@ -7,3 +7,25 @@ MODEL = "qwen2.5-coder"
 
 # The base URL of the Ollama server.
 BASE_URL = "http://localhost:11434"
+
+# Check for a new asksh release on PyPI at startup (once per 24h; best-effort).
+# Set to false to disable the check entirely.
+UPDATE_CHECK = true
+
+# How to render the assistant reply in a terminal, one setting per mode.
+# Streamed text is always plain by default; Markdown formatting is opt-in
+# and applied once the reply is known to be complete.
+#   text           - stream as plain text (the only copy).
+#   markdown       - show a spinner/preview while tokens arrive, then print
+#                    the whole reply as Markdown once, when it completes.
+#   post_markdown  - stream as plain text, then print a second Markdown
+#                    copy of the same reply below it.
+#   live_markdown  - live Markdown preview, redrawn as tokens arrive, then
+#                    one final Markdown print. Resizing or scrolling the
+#                    terminal mid-stream can garble the live preview (the
+#                    final print is always clean); accept that trade-off
+#                    only if you want live-formatted Markdown while it
+#                    streams.
+ONESHOT_RENDER = "text"
+EXPLAIN_RENDER = "text"
+CHAT_RENDER = "text"
