@@ -407,11 +407,14 @@ def _save_last_assistant_reply(history: ConversationHistory) -> None:
     """Persist the most recent assistant turn so ``asksh -m`` can re-render it.
 
     A no-op when the last chat message isn't from the assistant (e.g. the
-    reply was aborted, so no assistant turn was added to *history*).
+    reply was aborted, so no assistant turn was added to *history*), or when
+    that turn has no visible content.
     """
     chat_messages = history.get_chat_messages()
     if chat_messages and chat_messages[-1].role == "assistant":
-        save_last_message(chat_messages[-1].content)
+        content = chat_messages[-1].content
+        if content.strip():
+            save_last_message(content)
 
 
 def print_saved_markdown(content: str) -> None:
