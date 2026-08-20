@@ -123,6 +123,13 @@ def parse_args() -> argparse.Namespace:
         metavar="QUERY",
         help="Prompt for one-shot mode; if omitted, interactive chat runs.",
     )
+    # Render style per mode (config-only, no CLI flag): text, markdown,
+    # post_markdown, or live_markdown. See config.example.toml.
+    parser.set_defaults(
+        oneshot_render="text",
+        explain_render="text",
+        chat_render="text",
+    )
     parser.set_defaults(**arg_defaults)
     args = parser.parse_args()
 
@@ -181,6 +188,11 @@ def run(args: argparse.Namespace) -> None:
     else:
         mode = "oneshot"
     system_prompt = build_system_prompt(mode)
+    render_style = {
+        "oneshot": args.oneshot_render,
+        "explain": args.explain_render,
+        "chat": args.chat_render,
+    }[mode]
 
     stream = True
     history = ConversationHistory(system_prompt=system_prompt)
@@ -203,6 +215,7 @@ def run(args: argparse.Namespace) -> None:
             initial_query=query if query else None,
             think=args.think,
             show_thinking=args.show_thinking,
+            render_style=render_style,
         )
     else:
         if not query:
@@ -216,6 +229,7 @@ def run(args: argparse.Namespace) -> None:
             query,
             think=args.think,
             show_thinking=args.show_thinking,
+            render_style=render_style,
         )
 
 

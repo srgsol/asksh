@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from asksh.client import OllamaChatClient, ThinkOption
+from asksh.config import RenderStyle
 from asksh.history import ConversationHistory
 from asksh.render import console, print_assistant_reply
 
@@ -113,6 +114,7 @@ def chat_loop(
     *,
     think: ThinkOption = False,
     show_thinking: bool = False,
+    render_style: RenderStyle = "text",
 ) -> None:
     stdout_tty = sys.stdout.isatty()
     stdin_tty = sys.stdin.isatty()
@@ -152,6 +154,7 @@ def chat_loop(
             initial_query,
             think=think,
             show_thinking=show_thinking,
+            render_style=render_style,
         )
 
     while True:
@@ -176,4 +179,5 @@ def chat_loop(
             user_input,
             think=think,
             show_thinking=show_thinking,
+            render_style=render_style,
         )

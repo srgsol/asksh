@@ -80,13 +80,27 @@ CLI flags always win. To avoid retyping `--model`/`--base-url` on every run, dro
 
 - `$XDG_CONFIG_HOME/asksh/config.toml` (or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset).
 
-Only `model`, `base_url` and `update_check` are read from the config file. See [`config.example.toml`](config.example.toml).
+Only `model`, `base_url`, `update_check`, and the per-mode render style are read from the config file. See [`config.example.toml`](config.example.toml).
 
-| Setting        | Default                  |
-| -------------- | ------------------------ |
-| `model`        | `qwen2.5-coder`          |
-| `base_url`     | `http://localhost:11434` |
-| `update_check` | `true`                   |
+| Setting          | Default                  |
+| ---------------- | ------------------------ |
+| `model`          | `qwen2.5-coder`          |
+| `base_url`       | `http://localhost:11434` |
+| `update_check`   | `true`                   |
+| `oneshot_render` | `text`               |
+| `explain_render` | `text`                   |
+| `chat_render`    | `text`                   |
+
+### Render style
+
+`ONESHOT_RENDER` / `EXPLAIN_RENDER` / `CHAT_RENDER` (config-only, no CLI flag) each pick one of:
+
+- `text` — stream as plain text (the only copy).
+- `markdown` — show a spinner/preview while tokens arrive, then print the whole reply as Markdown once, when it completes.
+- `post_markdown` — stream as plain text, then print a second Markdown copy of the same reply below it.
+- `live_markdown` — live Markdown preview, redrawn as tokens arrive, then one final Markdown print. Resizing or scrolling the terminal mid-stream can garble the live preview (the final print is always clean); accept that trade-off only if you want live-formatted Markdown while it streams.
+
+An invalid value is ignored with a warning; the mode's default (above) is used instead.
 
 At startup, asksh checks PyPI for a new release (at most once per 24h, cached in `$XDG_CACHE_HOME/asksh/update_check`). If one exists it prints a one-line notice with the upgrade command; the check never fails startup and is skipped entirely when offline. Disable it with `UPDATE_CHECK = false` in the config or the `--no-update-check` flag.
 
@@ -124,7 +138,7 @@ asksh
 asksh -c
 ```
 
-Replies stream in append-only: finished lines are printed once and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output. Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
+By default (`CHAT_RENDER = "text"`), replies stream append-only: finished lines are printed once and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output — this guarantee holds for the `text`, `markdown`, and `post_markdown` render styles alike (only `live_markdown` redraws in place and can desync on resize/scroll; see [Render style](#render-style)). Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
 
 ### Explain mode
 

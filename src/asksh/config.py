@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -13,19 +13,39 @@ else:
     import tomli as tomllib
 
 
-_VALID_CONFIG_KEYS = frozenset({"MODEL", "BASE_URL", "UPDATE_CHECK"})
+RenderStyle = Literal["text", "markdown", "post_markdown", "live_markdown"]
+_RENDER_STYLES: frozenset[str] = frozenset(get_args(RenderStyle))
+
+_VALID_CONFIG_KEYS = frozenset(
+    {
+        "MODEL",
+        "BASE_URL",
+        "UPDATE_CHECK",
+        "ONESHOT_RENDER",
+        "EXPLAIN_RENDER",
+        "CHAT_RENDER",
+    }
+)
+
+_RENDER_STYLE_KEYS = frozenset({"ONESHOT_RENDER", "EXPLAIN_RENDER", "CHAT_RENDER"})
 
 # TOML keys -> argparse ``Namespace`` attribute names (``--model``, ``--base-url``).
 _CONFIG_TO_ARG_DEST: dict[str, str] = {
     "MODEL": "model",
     "BASE_URL": "base_url",
     "UPDATE_CHECK": "update_check",
+    "ONESHOT_RENDER": "oneshot_render",
+    "EXPLAIN_RENDER": "explain_render",
+    "CHAT_RENDER": "chat_render",
 }
 
 _CONFIG_KEY_TYPES: dict[str, type] = {
     "MODEL": str,
     "BASE_URL": str,
     "UPDATE_CHECK": bool,
+    "ONESHOT_RENDER": str,
+    "EXPLAIN_RENDER": str,
+    "CHAT_RENDER": str,
 }
 
 
@@ -66,6 +86,13 @@ def load_user_config() -> dict[str, Any]:
             print(
                 f"Warning: config key {key!r} must be {expected.__name__}, "
                 f"got {type(val).__name__}; ignoring.",
+                file=sys.stderr,
+            )
+            continue
+        if key in _RENDER_STYLE_KEYS and val not in _RENDER_STYLES:
+            print(
+                f"Warning: config key {key!r} must be one of "
+                f"{', '.join(sorted(_RENDER_STYLES))}; got {val!r}; ignoring.",
                 file=sys.stderr,
             )
             continue

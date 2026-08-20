@@ -23,34 +23,48 @@ Out of scope: model communication, prompts sent to the model, configuration, pac
 | **Transcript** | The visible record of the session: intro, user messages, and completed assistant replies. |
 | **Thinking trace** | The model's reasoning, shown separately from the answer when enabled. |
 | **Tail-follow (auto-follow)** | Default streaming behavior: the view stays pinned to the newest lines as they arrive. Suspended while the user is scrolled up reading earlier content. |
+| **Render style** | One of four ways to present a reply's answer content, selected independently for each of the three modes (one-shot, explain, chat) — see §4. |
 
 ---
 
 ## 3. Streaming reply display
 
-**F-01** — In an interactive terminal, a streamed reply MUST appear incrementally: text is displayed as it arrives, without waiting for the reply to complete.
+**F-00** — The answer content of a reply is presented using one of four **render styles** (`text`, `markdown`, `post_markdown`, `live_markdown`; see §4), chosen independently for each mode (one-shot, explain, chat). Everything else in this section (thinking trace, waiting indicator) is unaffected by the choice of render style.
 
-**F-02** — Once a piece of the reply has been displayed, it MUST NOT move, be redrawn, or be replaced: the display is append-only. Consequently the streaming display MAY scroll the terminal exactly as any other command's growing output would once it exceeds the visible height — that is normal, expected, and not something the program prevents or compensates for.
+**F-01** — In an interactive terminal, a streamed reply's answer content MUST appear incrementally for the `text` and `post_markdown` styles: text is displayed as it arrives, without waiting for the reply to complete. For `live_markdown` the *formatted* preview appears incrementally instead (§4). For `markdown`, the answer content is intentionally withheld until the reply is complete (a waiting indicator is shown in its place; see F-90); this is a deliberate exception, not a violation.
+
+**F-02** — Once a piece of the reply has been displayed, it MUST NOT move, be redrawn, or be replaced: the display is append-only. This holds for everything committed under `text`, `post_markdown`, and `markdown`, and for the one final print every style produces (§6). It deliberately does not hold for `live_markdown`'s in-progress preview, which is redrawn in place by design (F-02-LIVE). Consequently the streaming display MAY scroll the terminal exactly as any other command's growing output would once it exceeds the visible height — that is normal, expected, and not something the program prevents or compensates for.
+
+**F-02-LIVE** — `live_markdown` is the one documented exception to F-02: its in-progress preview is redrawn in place (not append-only) so it can show live-formatted Markdown while still streaming. This means a resize or a scroll mid-stream MAY visibly corrupt that in-progress preview (see §7); the final print (F-05) is unaffected and always clean. Choosing `live_markdown` is an explicit trade-off of that risk for a live-formatted view.
 
 **F-03** — The display MUST feel live: updates MUST appear with imperceptible latency as tokens arrive (a useful bar: visible state changes reflect new content within ~100 ms), and any waiting animation MUST remain smoothly animated even when no new content is arriving.
 
-**F-04** — At most one line — the one currently being received — MAY be redrawn in place while it is still incomplete (e.g. an animated waiting indicator, or a preview of the in-progress line). Everything else on screen is final the moment it is printed.
+**F-04** — For `text`, `post_markdown`, and `markdown`, at most one line — the one currently being received, or a waiting indicator — MAY be redrawn in place while it is still incomplete. Everything else on screen is final the moment it is printed. For `live_markdown`, the entire in-progress preview (not just one line) is redrawn in place on every update (F-02-LIVE); this is that style's counterpart to F-04.
 
-**F-05** — There is no separate "final, fully rendered reply" distinct from what streamed: the last piece of the reply is committed to the screen as soon as it is known to be complete, with no leftover fragments and no second copy. See §6.
+**F-05** — For `text`, there is no separate "final, fully rendered reply" distinct from what streamed: the last piece of the reply is committed to the screen as soon as it is known to be complete, with no leftover fragments and no second copy. The other three styles each add exactly one final Markdown-formatted print once the reply is complete: for `markdown` it is the *only* copy (nothing streamed before it); for `post_markdown` it is a deliberate *second* copy printed immediately after the streamed plain-text copy; for `live_markdown` it *replaces* the erased in-progress preview. In every style there is exactly one lasting copy of each kind the style promises — never a stray, half-updated fragment left behind. See §6.
 
-**F-06** — In a one-shot run (a query given as an argument), the streamed reply is shown the same way and the program exits when the final reply has been printed; no intro and no prompt are displayed.
+**F-06** — In a one-shot run (a query given as an argument), the reply is shown the same way as any other run and the program exits when the final reply has been printed; no intro and no prompt are displayed.
 
-## 4. Markdown rendering
+## 4. Render styles and Markdown rendering
 
-**F-10** — Assistant content MUST be rendered as Markdown. Supported elements MUST include at minimum: headings, paragraphs, lists (ordered and unordered), fenced code blocks, inline code, bold, italic, links, and blockquotes. Tables SHOULD be supported.
+**F-10** — Markdown formatting of assistant content is **opt-in**, chosen per mode via the render style (F-00). The four styles:
 
-**F-11** — Rendering MUST be incremental: a Markdown construct MUST be displayed in its styled form as soon as it is known that later text cannot change how it is shown (e.g. a code fence's lines render as a code block as they arrive, one full line at a time; a construct whose meaning or layout could still change — a numbered list whose indent width depends on its final item count, a table whose column widths depend on every row, a line that could still turn into a heading — is held back until it is unambiguously finished).
+| Style | While streaming | When the reply completes |
+| --- | --- | --- |
+| `text` | Answer content streams as plain text (append-only). | Nothing further — the streamed text is the only copy. |
+| `markdown` | Nothing of the answer is shown (a waiting indicator only, F-90). | The complete answer is printed once, rendered as Markdown. |
+| `post_markdown` | Same as `text`. | A second copy of the complete answer is printed immediately after, rendered as Markdown. |
+| `live_markdown` | A live, reformatted-on-every-update Markdown preview of the answer so far (F-02-LIVE). | The preview is erased and the complete answer is printed once, rendered as Markdown. |
 
-**F-12** — Content MUST wrap and reflow to the current terminal width at the time each part of it is displayed. Because already-displayed lines are never redrawn (F-02), a resize only affects lines printed *after* it; lines printed before keep the wrapping they were given, exactly like any other command's past output.
+Whichever style is active, Markdown rendering (wherever it occurs) MUST support at minimum: headings, paragraphs, lists (ordered and unordered), fenced code blocks, inline code, bold, italic, links, and blockquotes. Tables SHOULD be supported.
+
+**F-11** — Rendering is **not** required to be incremental at the level of individual Markdown constructs (a heading, list, or table styling up the instant its closing token arrives mid-stream is not a requirement of any style): `markdown` and `post_markdown` apply Markdown formatting exactly once, to the complete, final text. `live_markdown` re-renders its *entire* buffer as Markdown on every update, so a construct may render provisionally (e.g. a list still growing) until the buffer settles — full-buffer re-render, not per-construct incremental commit.
+
+**F-12** — Content MUST wrap and reflow to the current terminal width at the time each part of it is displayed. Because already-displayed lines are never redrawn (F-02), a resize only affects lines printed *after* it; lines printed before keep the wrapping they were given, exactly like any other command's past output. (For `live_markdown`'s in-progress preview specifically, see F-02-LIVE and §7.)
 
 **F-13** — Code blocks MUST be shown without syntax highlighting.
 
-**F-14** — The reply the user ends up with in scrollback MUST be equivalent to rendering the complete accumulated text once: streaming it out incrementally (F-11) must never produce a different visual result than rendering the whole thing at once would, just spread out over time.
+**F-14** — Wherever a style produces a Markdown-formatted copy (`markdown`, `post_markdown`, `live_markdown`'s final print), it MUST be equivalent to rendering the complete accumulated text once — trivially true since it is in fact rendered exactly once, from the complete text, never incrementally. For `text`, the analogous guarantee is that the streamed plain text, taken as a whole, is exactly the complete accumulated text with no reformatting at all.
 
 ## 5. Thinking trace
 
@@ -70,15 +84,15 @@ Out of scope: model communication, prompts sent to the model, configuration, pac
 
 **F-30** — By the time streaming ends, the reply MUST be presented in full in scrollback: every part of it committed, wrapped at the terminal width in effect when it was printed, never cropped regardless of length.
 
-**F-31** — Scrolling back MUST show exactly one copy of the reply. Because content is committed once and never redrawn (F-02), there is no intermediate state left behind to appear as a second copy.
+**F-31** — Scrolling back MUST show exactly one copy of the reply per copy the active render style promises (F-05, F-10): one for `text`, `markdown`, and `live_markdown`; deliberately two (plain text, then Markdown) for `post_markdown`. No style ever leaves behind an *extra*, unintended copy or a leftover in-progress fragment: content is committed once and never redrawn (F-02), and `live_markdown`'s in-progress preview is fully erased before its one final print.
 
-**F-32** — If the reply contains no answer content, nothing from the reply MUST be printed (a thinking trace, if any, is still printed per F-24).
+**F-32** — If the reply contains no answer content, nothing from the reply MUST be printed, regardless of render style (a thinking trace, if any, is still printed per F-24).
 
 **F-33** — The final reply MUST be followed immediately by whatever comes next (the next prompt in chat mode, or program exit in one-shot mode), with no stray blank region between them.
 
 ## 7. Terminal resize
 
-**F-40** — The user MUST be able to resize the terminal at any point while a reply is streaming — including while scrolled up into older content — without corrupting the display. Because already-printed lines are never redrawn or moved (F-02), a resize has nothing to corrupt: there MUST be no duplicated lines, no garbled or half-erased text, no misaligned cursor.
+**F-40** — For `text`, `post_markdown`, and `markdown`, the user MUST be able to resize the terminal at any point while a reply is streaming — including while scrolled up into older content — without corrupting the display. Because already-printed lines are never redrawn or moved (F-02), a resize has nothing to corrupt: there MUST be no duplicated lines, no garbled or half-erased text, no misaligned cursor. `live_markdown` is the documented exception (F-02-LIVE): a resize or scroll while its in-progress preview is on screen MAY corrupt that preview, because it is a cursor-relative repaint, not append-only; this is an accepted trade-off of that style, and the final print after the preview is erased is unaffected.
 
 **F-41** — After a resize, content printed from that point on MUST wrap at the new width. Content printed before the resize keeps the wrapping it was given, exactly as with any other command's past terminal output.
 
@@ -173,7 +187,7 @@ These values are part of the product; a new implementation MUST reproduce them (
 
 ## 14. Interrupts and error handling
 
-**F-110** — `Ctrl-C` while a reply is streaming MUST abort the current reply cleanly, and the program either returns to the chat prompt or exits gracefully. A traceback MUST NOT be shown. Whatever part of the reply was already committed to the screen (F-02) MUST remain visible — it cannot be un-printed — but the interrupted reply MUST NOT be added to the conversation history.
+**F-110** — `Ctrl-C` while a reply is streaming MUST abort the current reply cleanly, and the program either returns to the chat prompt or exits gracefully. A traceback MUST NOT be shown. Whatever part of the reply was already committed to the screen MUST remain visible — it cannot be un-printed — but the interrupted reply MUST NOT be added to the conversation history. There is no final Markdown print for an aborted reply: `text` and `post_markdown` leave whatever plain text had already streamed; `markdown` and `live_markdown` leave nothing of the answer visible at all (nothing had been committed yet, and `live_markdown`'s in-progress preview is erased on abort like any other exit).
 
 **F-111** — If the reply stream fails mid-way (network error, server error), the UI MUST leave the terminal in a clean state: no garbled screen, whatever was already committed stays as-is, and an error message on stderr per F-102.
 
@@ -194,14 +208,16 @@ The following are explicitly **not** required (changing them is a product decisi
 
 ## 17. Acceptance checklist (manual, observable)
 
-1. Stream a reply longer than the terminal: content scrolls the terminal naturally as it grows, exactly like any other command's output; on completion the full reply is present exactly once in scrollback.
-2. Scroll up while a long reply is streaming: earlier lines of the reply are visible; the program never fights the terminal's own scroll position, and new content keeps arriving below regardless of where the view is scrolled.
-3. Resize smaller and larger mid-stream (including while scrolled up into older content): no duplicated/garbled text; content printed after the resize wraps at the new width; content printed before it is untouched.
-4. Resize while waiting for the first token: no corruption; the waiting indicator keeps animating at the new width.
-5. Resize at the exact moment streaming ends: clean transition, no residue.
-6. Markdown constructs (code fence, list, heading) style up as soon as their closing tokens arrive mid-stream.
-7. Thinking model with trace enabled: dim italic trace above a blank line above the content, live and final; `--think false`: no trace anywhere.
+1. `text`/`post_markdown`: stream a reply longer than the terminal: content scrolls the terminal naturally as it grows, exactly like any other command's output; on completion the full reply is present exactly once (`text`) or exactly twice, plain then Markdown (`post_markdown`) in scrollback.
+2. `text`/`post_markdown`/`markdown`: scroll up while a long reply is streaming (or waiting, for `markdown`): earlier lines are visible; the program never fights the terminal's own scroll position, and new content keeps arriving below regardless of where the view is scrolled.
+3. `text`/`post_markdown`/`markdown`: resize smaller and larger mid-stream (including while scrolled up into older content): no duplicated/garbled text; content printed after the resize wraps at the new width; content printed before it is untouched.
+4. Resize while waiting for the first token (any style): no corruption; the waiting indicator keeps animating at the new width.
+5. Resize at the exact moment streaming ends (any style): clean transition, no residue.
+6. `markdown`/`post_markdown`/`live_markdown`: the final printed copy renders Markdown constructs (code fence, list, heading, bold, italic, links, blockquote) correctly; for `live_markdown`, the in-progress preview also shows Markdown formatting, live, as the buffer grows (may render provisionally until a construct settles — F-11).
+6a. `live_markdown`: resize or scroll while the in-progress preview is on screen MAY visibly disturb that preview (F-02-LIVE) — verify only that the final printed copy afterward is clean, not that the in-progress preview survives.
+7. Thinking model with trace enabled: dim italic trace above a blank line above the content, live and final; `--think false`: no trace anywhere. This is independent of render style.
 8. `Enter` submits, `Alt+Enter` inserts a newline, input history survives a restart, empty input re-prompts, `exit`/`QUIT`/`Ctrl-C`/`Ctrl-D` all say `Goodbye!`.
 9. `cat file | asksh -c "…"`: file content sent as first message; prompt still interactive afterwards.
-10. `asksh "…" > out.txt`: plain text only, no ANSI, one trailing newline.
-11. `Ctrl-C` mid-stream: stream aborts cleanly, no traceback (F-110).
+10. `asksh "…" > out.txt`: plain text only, no ANSI, one trailing newline, regardless of render style (F-80).
+11. `Ctrl-C` mid-stream (each style): stream aborts cleanly, no traceback, no final Markdown print (F-110).
+12. Set a different render style per mode in `config.toml` (e.g. `ONESHOT_RENDER = "live_markdown"`, `CHAT_RENDER = "post_markdown"`) and confirm each mode behaves per its own configured style, independently of the others.
