@@ -33,6 +33,7 @@ from asksh.stream_render import AppendOnlyWriter, LiveRow, PreviewWriter, Stream
 console = Console(highlight=False)
 _SPINNER_STYLE = "bright_cyan"
 _THINKING_STYLE = "grey50 italic"
+_WAIT_SPINNER = Spinner("dots", style=_SPINNER_STYLE)
 
 # Only the ``live_markdown`` render style uses Rich ``Live``. Its cursor-up
 # repaint can desync on resize or scroll for a preview taller than the
@@ -157,7 +158,7 @@ def _live_markdown_display(
             parts.append(Text(""))
         parts.append(Markdown(visible_content, code_theme=plain_code_theme))
     if not parts:
-        return Spinner("dots", style=_SPINNER_STYLE)
+        return _WAIT_SPINNER
     if len(parts) == 1:
         return parts[0]
     return Group(*parts)
@@ -178,9 +179,50 @@ def _stream_reply_tty_live_markdown(
     _patch_live_render_crop_above()
     thinking_text = ""
     content_text = ""
+
+    def _apply_chunk(chunk: ChatStreamChunk) -> None:
+        nonlocal thinking_text, content_text
+        if chunk.is_thinking:
+            if display_thinking:
+                thinking_text += chunk.text
+        else:
+            content_text += chunk.text
+
+    def _has_displayable_text() -> bool:
+        visible_content, thinking_display = _display_texts(content_text, thinking_text)
+        return bool(visible_content or (display_thinking and thinking_display))
+
+    live_row = LiveRow(console)
+    wait_writer = PreviewWriter(console, live_row, spinner_style=_SPINNER_STYLE)
+    animator = StreamAnimator()
+    animator.start()
+    animator.set(wait_writer, "")
+
+    try:
+        try:
+            while True:
+                chunk = next(gen)
+                _apply_chunk(chunk)
+                if _has_displayable_text():
+                    break
+        except StopIteration:
+            pass
+    except KeyboardInterrupt:
+        abort.set()
+        client.abort_active_stream()
+        return
+    finally:
+        animator.stop()
+        wait_writer.finish()
+
+    if not _has_displayable_text():
+        return
+
     try:
         with Live(
-            _live_markdown_display("", "", display_thinking=display_thinking),
+            _live_markdown_display(
+                content_text, thinking_text, display_thinking=display_thinking
+            ),
             console=console,
             refresh_per_second=12,
             transient=True,
@@ -189,12 +231,7 @@ def _stream_reply_tty_live_markdown(
             try:
                 while True:
                     chunk = next(gen)
-                    if chunk.is_thinking:
-                        if not display_thinking:
-                            continue
-                        thinking_text += chunk.text
-                    else:
-                        content_text += chunk.text
+                    _apply_chunk(chunk)
                     live.update(
                         _live_markdown_display(
                             content_text,
@@ -220,93 +257,6 @@ def _stream_reply_tty_live_markdown(
         console.print(Markdown(visible_content, code_theme=plain_code_theme))
 
 
-def _stream_reply_tty_text(
-    gen: Generator[ChatStreamChunk, None, object],
-    client: OllamaChatClient,
-    abort: threading.Event,
-    *,
-    display_thinking: bool,
-    post_markdown: bool = False,
-) -> None:
-    """``text`` / ``post_markdown``: write plain-text deltas as chunks arrive."""
-    thinking_text = ""
-    content_text = ""
-    committed_visible = ""
-    committed_thinking = ""
-    thinking_prefix_printed = False
-    thinking_started = False
-    thinking_done = False
-
-    def _print_thinking_delta(thinking_display: str) -> None:
-        nonlocal thinking_prefix_printed, committed_thinking
-        if not thinking_display:
-            return
-        if not thinking_prefix_printed:
-            console.print(Text(_THINKING_PREFIX, style=_THINKING_STYLE), end="")
-            thinking_prefix_printed = True
-        if thinking_display.startswith(committed_thinking):
-            delta = thinking_display[len(committed_thinking) :]
-            if delta:
-                console.print(Text(delta, style=_THINKING_STYLE), end="")
-            committed_thinking = thinking_display
-        else:
-            committed_thinking = thinking_display
-
-    def _print_content_delta(visible_content: str) -> None:
-        nonlocal committed_visible
-        if visible_content.startswith(committed_visible):
-            delta = visible_content[len(committed_visible) :]
-            if delta:
-                console.file.write(delta)
-                console.file.flush()
-            committed_visible = visible_content
-        else:
-            committed_visible = visible_content
-
-    try:
-        try:
-            while True:
-                chunk = next(gen)
-                if chunk.is_thinking:
-                    if not display_thinking:
-                        continue
-                    thinking_text += chunk.text
-                else:
-                    content_text += chunk.text
-
-                visible_content, thinking_display = _display_texts(
-                    content_text, thinking_text
-                )
-                if thinking_display:
-                    thinking_started = True
-
-                if thinking_started and display_thinking and not thinking_done:
-                    _print_thinking_delta(thinking_display)
-                    if visible_content:
-                        console.print()
-                        console.print()
-                        thinking_done = True
-                        _print_content_delta(visible_content)
-                else:
-                    _print_content_delta(visible_content)
-        except StopIteration:
-            pass
-    except KeyboardInterrupt:
-        abort.set()
-        client.abort_active_stream()
-        return
-
-    visible_content, _ = _display_texts(content_text, thinking_text)
-    if visible_content and not visible_content.endswith("\n"):
-        console.file.write("\n")
-        console.file.flush()
-
-    if post_markdown:
-        if visible_content:
-            console.print()
-            console.print(Markdown(visible_content, code_theme=plain_code_theme))
-
-
 def _stream_reply_tty(
     gen: Generator[ChatStreamChunk, None, object],
     client: OllamaChatClient,
@@ -321,18 +271,13 @@ def _stream_reply_tty(
         )
         return
 
-    if render_style in ("text", "post_markdown"):
-        _stream_reply_tty_text(
-            gen,
-            client,
-            abort,
-            display_thinking=display_thinking,
-            post_markdown=render_style == "post_markdown",
-        )
-        return
-
     live_row = LiveRow(console)
-    content_writer = PreviewWriter(console, live_row, spinner_style=_SPINNER_STYLE)
+    if render_style == "markdown":
+        content_writer = PreviewWriter(console, live_row, spinner_style=_SPINNER_STYLE)
+    else:
+        content_writer = AppendOnlyWriter(
+            console, live_row, spinner_style=_SPINNER_STYLE
+        )
     thinking_writer = (
         AppendOnlyWriter(
             console,
@@ -399,7 +344,9 @@ def _stream_reply_tty(
         content_writer.finish()
 
     visible_content, _ = _display_texts(content_text, thinking_text)
-    if visible_content:
+    if render_style in ("markdown", "post_markdown") and visible_content:
+        if render_style == "post_markdown":
+            console.print()
         console.print(Markdown(visible_content, code_theme=plain_code_theme))
 
 

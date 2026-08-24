@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Generator
 from io import StringIO
 from unittest.mock import MagicMock, patch
@@ -163,6 +164,38 @@ def test_stream_tty_error_is_raised() -> None:
 def test_stream_tty_empty_reply_prints_nothing() -> None:
     raw, _ = _run_stream([])
     assert [line for line in simulate_terminal(raw) if line.strip()] == []
+
+
+def _run_delayed_stream(render_style: str) -> str:
+    """Run a stream that waits before the first chunk so the wait spinner paints."""
+
+    def delayed_stream():
+        time.sleep(0.15)
+        yield ChatStreamChunk("Hello")
+
+    client = MagicMock()
+    client.stream_message.return_value = delayed_stream()
+    history = ConversationHistory(system_prompt="test")
+    console, buf = make_console()
+
+    with (
+        patch("asksh.render.sys.stdout") as mock_stdout,
+        patch.object(render_mod, "console", console),
+    ):
+        mock_stdout.isatty.return_value = True
+        print_assistant_reply(
+            client, history, "test-model", True, "hi", render_style=render_style
+        )
+
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize(
+    "render_style", ["text", "markdown", "post_markdown", "live_markdown"]
+)
+def test_stream_tty_shows_spinner_before_first_delta(render_style: str) -> None:
+    raw = _run_delayed_stream(render_style)
+    assert any(frame in raw for frame in "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
 
 
 # -- "markdown" style: no streamed body, one Markdown print at the end --
