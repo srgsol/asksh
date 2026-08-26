@@ -1,4 +1,4 @@
-# ❯_ asksh
+# asksh
 
 [![PyPI](https://img.shields.io/pypi/v/asksh)](https://pypi.org/project/asksh/)
 [![Python](https://img.shields.io/pypi/pyversions/asksh)](https://pypi.org/project/asksh/)
