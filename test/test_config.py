@@ -37,6 +37,55 @@ def test_load_user_config_round_trip(
     assert d["base_url"] == "http://example:11434"
 
 
+def test_load_user_config_lowercase_keys(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    p = _config_file(tmp_path)
+    p.write_text(
+        'model = "m1"\nbase_url = "http://example:11434"\n',
+        encoding="utf-8",
+    )
+    d = asksh_config.load_user_config()
+    assert d["model"] == "m1"
+    assert d["base_url"] == "http://example:11434"
+
+
+def test_load_user_config_env_vars_upper_or_lower(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("ASKSH_MODEL", "env-model")
+    monkeypatch.setenv("asksh_base_url", "http://env:11434")
+    d = asksh_config.load_user_config()
+    assert d["model"] == "env-model"
+    assert d["base_url"] == "http://env:11434"
+
+
+def test_load_user_config_env_overrides_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    p = _config_file(tmp_path)
+    p.write_text('model = "file-model"\n', encoding="utf-8")
+    monkeypatch.setenv("ASKSH_MODEL", "env-model")
+    d = asksh_config.load_user_config()
+    assert d["model"] == "env-model"
+
+
+@pytest.mark.parametrize(
+    ("env_name", "expected"),
+    [("ASKSH_UPDATE_CHECK", True), ("asksh_update_check", False)],
+)
+def test_load_user_config_env_bool(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env_name: str, expected: bool
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv(env_name, "true" if expected else "false")
+    d = asksh_config.load_user_config()
+    assert d["update_check"] is expected
+
+
 def test_default_config_path_respects_xdg(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", "/xdg")
     assert asksh_config.default_config_path() == Path("/xdg/asksh/config.toml")

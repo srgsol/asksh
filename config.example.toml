@@ -1,5 +1,7 @@
 # Copy to ~/.config/asksh/config.toml
 # CLI flags always override these values.
+# Keys are case-insensitive (model and MODEL both work).
+# Environment variables (ASKSH_MODEL / asksh_model, etc.) override the file.
 
 # The LLM model to use.
 # Ollama models library: https://ollama.com/library

@@ -81,16 +81,16 @@ CLI flags always win. To avoid retyping `--model`/`--base-url` on every run, dro
 
 - `$XDG_CONFIG_HOME/asksh/config.toml` (or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset).
 
-Only `model`, `base_url`, `update_check`, and the per-mode render style are read from the config file. See [`config.example.toml`](config.example.toml).
+Config keys are case-insensitive (`model` and `MODEL` both work). The same settings can be set via environment variables (`ASKSH_MODEL` / `asksh_model`, `ASKSH_BASE_URL` / `asksh_base_url`, and so on); env vars override the config file. See [`config.example.toml`](config.example.toml).
 
-| Setting          | Default                  |
-| ---------------- | ------------------------ |
-| `model`          | `qwen2.5-coder`          |
-| `base_url`       | `http://localhost:11434` |
-| `update_check`   | `true`                   |
-| `oneshot_render` | `text`                   |
-| `explain_render` | `text`                   |
-| `chat_render`    | `text`                   |
+| Setting          | Default                  | Config key         | Environment variable   |
+| ---------------- | ------------------------ | ------------------ | ---------------------- |
+| `model`          | `qwen2.5-coder`          | `MODEL`            | `ASKSH_MODEL`          |
+| `base_url`       | `http://localhost:11434` | `BASE_URL`         | `ASKSH_BASE_URL`       |
+| `update_check`   | `true`                   | `UPDATE_CHECK`     | `ASKSH_UPDATE_CHECK`   |
+| `oneshot_render` | `text`                   | `ONESHOT_RENDER`   | `ASKSH_ONESHOT_RENDER` |
+| `explain_render` | `text`                   | `EXPLAIN_RENDER`   | `ASKSH_EXPLAIN_RENDER` |
+| `chat_render`    | `text`                   | `CHAT_RENDER`      | `ASKSH_CHAT_RENDER`    |
 
 ### Render style
 
