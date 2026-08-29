@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from io import StringIO
+
+from rich.console import Console
+from rich.text import Text
+
 from asksh.stream_render import AppendOnlyWriter, LiveRow, PreviewWriter
 from test.term_helpers import has_cursor_up, make_console, simulate_terminal
 
@@ -79,6 +84,39 @@ def test_spinner_shown_before_first_delta_and_gone_after() -> None:
     screen = simulate_terminal(buf.getvalue())
     assert not any("\u280b" in line for line in screen)
     assert any("Hello" in line for line in screen)
+
+
+def test_incomplete_line_preview_matches_committed_style() -> None:
+    """The still-growing line uses the same style as committed text -- not a
+    dim grey preview that flashes to the final color when the newline arrives."""
+    buf = StringIO()
+    console = Console(
+        file=buf,
+        width=50,
+        force_terminal=True,
+        color_system="truecolor",
+        _environ={},
+    )
+    grey_ref = StringIO()
+    grey_console = Console(
+        file=grey_ref,
+        width=50,
+        force_terminal=True,
+        color_system="truecolor",
+        _environ={},
+    )
+    grey_console.print(Text("Hello", style="grey50"), end="")
+    grey_ansi = grey_ref.getvalue()
+    # Isolate the SGR that paints grey50 so we can assert it is absent.
+    grey_sgr = grey_ansi[: grey_ansi.find("Hello")]
+    assert grey_sgr.startswith("\x1b[")
+
+    writer = AppendOnlyWriter(console, LiveRow(console))
+    writer.update("Hello")
+    assert grey_sgr not in buf.getvalue()
+    writer.update("Hello world\n")
+    writer.finish()
+    assert grey_sgr not in buf.getvalue()
 
 
 def test_finish_flushes_a_still_growing_last_line() -> None:
