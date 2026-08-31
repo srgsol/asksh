@@ -96,7 +96,7 @@ Config keys are case-insensitive (`model` and `MODEL` both work). The same setti
 
 `ONESHOT_RENDER` / `EXPLAIN_RENDER` / `CHAT_RENDER` (config-only, no CLI flag) each pick one of:
 
-- `text` — stream as plain text (the only copy).
+- `text` — print tokens as they arrive as plain text (the only copy).
 - `markdown` — show a spinner/preview while tokens arrive, then print the whole reply as Markdown once, when it completes.
 - `post_markdown` — stream as plain text, then print a second Markdown copy of the same reply below it.
 - `live_markdown` — live Markdown preview, redrawn as tokens arrive, then one final Markdown print. Resizing or scrolling the terminal mid-stream can garble the live preview (the final print is always clean); accept that trade-off only if you want live-formatted Markdown while it streams.
@@ -140,7 +140,7 @@ asksh
 asksh -c
 ```
 
-By default (`CHAT_RENDER = "text"`), replies stream append-only: finished lines are printed once and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output — this guarantee holds for the `text`, `markdown`, and `post_markdown` render styles alike (only `live_markdown` redraws in place and can desync on resize/scroll; see [Render style](#render-style)). Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
+By default (`CHAT_RENDER = "text"`), replies print as tokens arrive and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output — this guarantee holds for the `text`, `markdown`, and `post_markdown` render styles alike (only `live_markdown` redraws in place and can desync on resize/scroll; see [Render style](#render-style)). Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
 
 ### Explain mode
 

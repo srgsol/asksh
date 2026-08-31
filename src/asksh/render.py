@@ -28,7 +28,13 @@ from asksh.client import (
 from asksh.config import RenderStyle
 from asksh.history import ConversationHistory
 from asksh.last_message import save_last_message
-from asksh.stream_render import AppendOnlyWriter, LiveRow, PreviewWriter, StreamAnimator
+from asksh.stream_render import (
+    AppendOnlyWriter,
+    LiveRow,
+    PreviewWriter,
+    PrintWriter,
+    StreamAnimator,
+)
 
 console = Console(highlight=False)
 _SPINNER_STYLE = "bright_cyan"
@@ -274,6 +280,8 @@ def _stream_reply_tty(
     live_row = LiveRow(console)
     if render_style == "markdown":
         content_writer = PreviewWriter(console, live_row, spinner_style=_SPINNER_STYLE)
+    elif render_style == "text":
+        content_writer = PrintWriter(console, live_row, spinner_style=_SPINNER_STYLE)
     else:
         content_writer = AppendOnlyWriter(
             console, live_row, spinner_style=_SPINNER_STYLE

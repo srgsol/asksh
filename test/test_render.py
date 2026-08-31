@@ -83,6 +83,16 @@ def test_stream_tty_text_style_preserves_existing_trailing_newline() -> None:
     assert not raw.endswith("\n\n")
 
 
+def test_stream_tty_text_style_prints_tokens_without_preview() -> None:
+    """Text mode writes tokens as they arrive; it does not hold the last
+    line as a truncated live-row preview."""
+    text = "a" * 80
+    raw, _ = _run_stream([ChatStreamChunk(text)])
+    assert text in raw
+    assert raw.count(text) == 1
+    assert "\u2026" not in raw
+
+
 def test_stream_tty_prints_thinking_when_think_enabled() -> None:
     raw, _ = _run_stream(
         [

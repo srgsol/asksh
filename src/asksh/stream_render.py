@@ -7,6 +7,10 @@ an erase-to-end-of-line -- never a cursor-up. This makes native mouse-wheel
 scrolling and terminal resizes safe by construction: there is no region
 geometry left for either to desynchronize.
 
+``PrintWriter`` (the ``text`` render style) skips that last-line preview
+and writes tokens as they arrive; a wait spinner occupies the live row
+only until the first text.
+
 Everything here renders plain text only. Markdown formatting (when a render
 style asks for it) is applied once, after a stream completes, in
 ``render.py`` -- never incrementally against a growing buffer.
@@ -98,13 +102,13 @@ class AppendOnlyWriter:
         live_row: LiveRow,
         *,
         style: StyleType = "none",
-        preview_style: StyleType = "grey50",
+        preview_style: StyleType | None = None,
         spinner_style: str = "bright_cyan",
     ) -> None:
         self._console = console
         self._live_row = live_row
         self._style = style
-        self._preview_style = preview_style
+        self._preview_style = style if preview_style is None else preview_style
         self._text = ""
         self._committed = 0
         self._pending_source: str | None = None
@@ -166,6 +170,52 @@ class AppendOnlyWriter:
         self._live_row.paint(line)
 
 
+class PrintWriter:
+    """Writes new text to the console as it arrives.
+
+    Used by the ``text`` render style: no last-line preview and no
+    holdback. A wait spinner occupies the live row until the first
+    non-empty text; after that, tokens are printed and never rewritten.
+    """
+
+    def __init__(
+        self,
+        console: Console,
+        live_row: LiveRow,
+        *,
+        spinner_style: str = "bright_cyan",
+    ) -> None:
+        self._console = console
+        self._live_row = live_row
+        self._spinner = Spinner("dots", style=spinner_style)
+        self._text = ""
+        self._printed = 0
+        self._started = False
+
+    def update(self, text: str) -> None:
+        self._text = text
+        if not text.strip() and not self._started:
+            line = _preview_line(
+                self._console, "", spinner=self._spinner, style="grey50"
+            )
+            self._live_row.paint(line)
+            return
+        if not self._started:
+            self._live_row.clear()
+            self._started = True
+        if len(text) > self._printed:
+            self._console.file.write(text[self._printed :])
+            self._console.file.flush()
+            self._printed = len(text)
+
+    def finish(self) -> None:
+        if not self._started:
+            self._live_row.clear()
+        elif self._text and not self._text.endswith("\n"):
+            self._console.file.write("\n")
+        self._console.file.flush()
+
+
 class PreviewWriter:
     """Live-row-only preview: spinner, then a dim last-line preview.
 
@@ -200,7 +250,7 @@ class PreviewWriter:
 
 
 class _StreamWriter(Protocol):
-    """Duck-typed interface shared by ``AppendOnlyWriter`` and ``PreviewWriter``."""
+    """Duck-typed interface shared by the stream writers."""
 
     def update(self, text: str) -> None: ...
 
