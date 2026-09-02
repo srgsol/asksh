@@ -1,4 +1,4 @@
-# ❯_ asksh
+# asksh
 
 [![PyPI](https://img.shields.io/pypi/v/asksh)](https://pypi.org/project/asksh/)
 [![Python](https://img.shields.io/pypi/pyversions/asksh)](https://pypi.org/project/asksh/)
@@ -81,22 +81,22 @@ CLI flags always win. To avoid retyping `--model`/`--base-url` on every run, dro
 
 - `$XDG_CONFIG_HOME/asksh/config.toml` (or `~/.config/asksh/config.toml` if `XDG_CONFIG_HOME` is unset).
 
-Only `model`, `base_url`, `update_check`, and the per-mode render style are read from the config file. See [`config.example.toml`](config.example.toml).
+Config keys are case-insensitive (`model` and `MODEL` both work). The same settings can be set via environment variables (`ASKSH_MODEL` / `asksh_model`, `ASKSH_BASE_URL` / `asksh_base_url`, and so on); env vars override the config file. See [`config.example.toml`](config.example.toml).
 
-| Setting          | Default                  |
-| ---------------- | ------------------------ |
-| `model`          | `qwen2.5-coder`          |
-| `base_url`       | `http://localhost:11434` |
-| `update_check`   | `true`                   |
-| `oneshot_render` | `text`                   |
-| `explain_render` | `text`                   |
-| `chat_render`    | `text`                   |
+| Setting          | Default                  | Config key         | Environment variable   |
+| ---------------- | ------------------------ | ------------------ | ---------------------- |
+| `model`          | `qwen2.5-coder`          | `MODEL`            | `ASKSH_MODEL`          |
+| `base_url`       | `http://localhost:11434` | `BASE_URL`         | `ASKSH_BASE_URL`       |
+| `update_check`   | `true`                   | `UPDATE_CHECK`     | `ASKSH_UPDATE_CHECK`   |
+| `oneshot_render` | `text`                   | `ONESHOT_RENDER`   | `ASKSH_ONESHOT_RENDER` |
+| `explain_render` | `text`                   | `EXPLAIN_RENDER`   | `ASKSH_EXPLAIN_RENDER` |
+| `chat_render`    | `text`                   | `CHAT_RENDER`      | `ASKSH_CHAT_RENDER`    |
 
 ### Render style
 
 `ONESHOT_RENDER` / `EXPLAIN_RENDER` / `CHAT_RENDER` (config-only, no CLI flag) each pick one of:
 
-- `text` — stream as plain text (the only copy).
+- `text` — print tokens as they arrive as plain text (the only copy).
 - `markdown` — show a spinner/preview while tokens arrive, then print the whole reply as Markdown once, when it completes.
 - `post_markdown` — stream as plain text, then print a second Markdown copy of the same reply below it.
 - `live_markdown` — live Markdown preview, redrawn as tokens arrive, then one final Markdown print. Resizing or scrolling the terminal mid-stream can garble the live preview (the final print is always clean); accept that trade-off only if you want live-formatted Markdown while it streams.
@@ -140,7 +140,7 @@ asksh
 asksh -c
 ```
 
-By default (`CHAT_RENDER = "text"`), replies stream append-only: finished lines are printed once and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output — this guarantee holds for the `text`, `markdown`, and `post_markdown` render styles alike (only `live_markdown` redraws in place and can desync on resize/scroll; see [Render style](#render-style)). Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
+By default (`CHAT_RENDER = "text"`), replies print as tokens arrive and become part of the terminal's normal scrollback, so mouse-wheel scrolling and window resizing behave exactly as with any other command's output — this guarantee holds for the `text`, `markdown`, and `post_markdown` render styles alike (only `live_markdown` redraws in place and can desync on resize/scroll; see [Render style](#render-style)). Press `Ctrl-C` to abort the stream; whatever was already printed stays on screen (it cannot be un-printed), but the partial reply is not added to the conversation history.
 
 ### Explain mode
 

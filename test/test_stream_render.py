@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from asksh.stream_render import AppendOnlyWriter, LiveRow, PreviewWriter
+from io import StringIO
+
+from rich.console import Console
+from rich.text import Text
+
+from asksh.stream_render import AppendOnlyWriter, LiveRow, PreviewWriter, PrintWriter
 from test.term_helpers import has_cursor_up, make_console, simulate_terminal
 
 
@@ -10,7 +15,9 @@ def _writer(console):
     return AppendOnlyWriter(console, LiveRow(console))
 
 
-def _stream_text(writer: AppendOnlyWriter, text: str, *, chunk_size: int) -> None:
+def _stream_text(
+    writer: AppendOnlyWriter | PrintWriter, text: str, *, chunk_size: int
+) -> None:
     for i in range(0, len(text), chunk_size):
         writer.update(text[: i + chunk_size])
     writer.finish()
@@ -81,6 +88,39 @@ def test_spinner_shown_before_first_delta_and_gone_after() -> None:
     assert any("Hello" in line for line in screen)
 
 
+def test_incomplete_line_preview_matches_committed_style() -> None:
+    """The still-growing line uses the same style as committed text -- not a
+    dim grey preview that flashes to the final color when the newline arrives."""
+    buf = StringIO()
+    console = Console(
+        file=buf,
+        width=50,
+        force_terminal=True,
+        color_system="truecolor",
+        _environ={},
+    )
+    grey_ref = StringIO()
+    grey_console = Console(
+        file=grey_ref,
+        width=50,
+        force_terminal=True,
+        color_system="truecolor",
+        _environ={},
+    )
+    grey_console.print(Text("Hello", style="grey50"), end="")
+    grey_ansi = grey_ref.getvalue()
+    # Isolate the SGR that paints grey50 so we can assert it is absent.
+    grey_sgr = grey_ansi[: grey_ansi.find("Hello")]
+    assert grey_sgr.startswith("\x1b[")
+
+    writer = AppendOnlyWriter(console, LiveRow(console))
+    writer.update("Hello")
+    assert grey_sgr not in buf.getvalue()
+    writer.update("Hello world\n")
+    writer.finish()
+    assert grey_sgr not in buf.getvalue()
+
+
 def test_finish_flushes_a_still_growing_last_line() -> None:
     console, buf = make_console(width=50)
     writer = _writer(console)
@@ -129,4 +169,69 @@ def test_preview_writer_shows_spinner_then_last_line_preview() -> None:
     writer.update("partial line")
     assert "partial line" in buf.getvalue()
     writer.finish()
+    assert not has_cursor_up(buf.getvalue())
+
+
+def _print_writer(console):
+    return PrintWriter(console, LiveRow(console))
+
+
+def test_print_writer_writes_tokens_once_without_preview() -> None:
+    console, buf = make_console(width=50)
+    writer = _print_writer(console)
+    writer.update("Hello")
+    writer.update("Hello world")
+    writer.finish()
+    raw = buf.getvalue()
+    assert raw.count("Hello world") == 1
+    assert any("Hello world" in line for line in simulate_terminal(raw))
+    assert "\u2026" not in raw
+
+
+def test_print_writer_long_line_is_not_truncated() -> None:
+    """Unlike the live-row preview, a line wider than the terminal is
+    written in full rather than ellipsized to one row."""
+    console, buf = make_console(width=20)
+    writer = _print_writer(console)
+    text = "abcdefghijklmnopqrstuvwxyz"
+    writer.update(text)
+    writer.finish()
+    raw = buf.getvalue()
+    assert text in raw
+    assert "\u2026" not in raw
+
+
+def test_print_writer_adds_trailing_newline_only_when_missing() -> None:
+    console, buf = make_console(width=50)
+    writer = _print_writer(console)
+    writer.update("Hello world")
+    writer.finish()
+    assert buf.getvalue().endswith("\n")
+    assert not buf.getvalue().endswith("\n\n")
+
+    console, buf = make_console(width=50)
+    writer = _print_writer(console)
+    writer.update("Hello world\n")
+    writer.finish()
+    assert buf.getvalue().endswith("\n")
+    assert not buf.getvalue().endswith("\n\n")
+
+
+def test_print_writer_spinner_cleared_before_first_text() -> None:
+    console, buf = make_console(width=50)
+    writer = _print_writer(console)
+    writer.update("")
+    assert "\u280b" in buf.getvalue() or any(
+        frame in buf.getvalue() for frame in "\u280b\u2819\u2839\u2838"
+    )
+    writer.update("Hello")
+    writer.finish()
+    screen = simulate_terminal(buf.getvalue())
+    assert not any("\u280b" in line for line in screen)
+    assert any("Hello" in line for line in screen)
+
+
+def test_print_writer_never_emits_cursor_up() -> None:
+    console, buf = make_console(width=50)
+    _stream_text(_print_writer(console), DOCUMENT, chunk_size=1)
     assert not has_cursor_up(buf.getvalue())

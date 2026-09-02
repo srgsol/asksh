@@ -172,7 +172,7 @@ def warn_if_update_available(args: argparse.Namespace) -> None:
     if latest:
         print(
             f"Info: new asksh version available: {latest} (installed: {__version__}). "
-            "Upgrade with: 'pipx upgrade asksh' or 'uv tool upgrade asksh'",
+            "Upgrade with: 'pipx upgrade asksh' or 'uv tool upgrade asksh'\n",
             file=sys.stderr,
         )
 
